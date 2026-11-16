@@ -185,3 +185,25 @@ export interface ArgueTally {
   counts: Record<string, number>;
   mine: string | null;
 }
+
+/** A cause proposed by a visitor. Only approved nominations are public. */
+export interface Nomination {
+  id: string;
+  name: string;
+  place: string | null;
+  summary: string;
+  status: "pending" | "approved" | "rejected" | "chosen";
+  votes: number;
+  at: string;
+}
+
+/** The council's monthly debate over the top nominations. */
+export interface NominationRound {
+  month: string;
+  at: string;
+  candidates: { id: string; name: string; votes: number }[];
+  views: { agentId: string; pick: string; say: string }[];
+  winner: string;
+  statement: string;
+  model: string;
+}

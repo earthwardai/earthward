@@ -16,6 +16,7 @@ import { AboutPage, ContactPage, HowItWorksPage, LedgerPage, NotFound, PrivacyPa
 import { startTracking, trackView } from "./track";
 import { FeedbackButton } from "./components/Feedback";
 import { PredictPage } from "./pages/Predict";
+import { NominatePage } from "./pages/Nominate";
 
 function ThemeToggle() {
   const [theme, setTheme] = useTheme();
@@ -124,6 +125,9 @@ function Footer() {
               <Link href="/earth-ai">Earth AI</Link>
             </li>
             <li>
+              <Link href="/nominate">Nominate a cause</Link>
+            </li>
+            <li>
               <Link href="/global-ai-council">Global AI council</Link>
             </li>
             {AGENTS.map((a) => (
@@ -216,6 +220,7 @@ function App() {
         <Route path="/causes/:id">{(p) => <CausePage id={p.id} />}</Route>
         <Route path="/ask" component={AskPage} />
         <Route path="/predict" component={PredictPage} />
+        <Route path="/nominate" component={NominatePage} />
         <Route path="/impact/:id">{(p) => <ImpactPage id={p.id} />}</Route>
         <Route path="/admin" component={AdminPage} />
         <Route component={NotFound} />

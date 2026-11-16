@@ -1,6 +1,6 @@
 import { FieldValue, Firestore, Timestamp, type DocumentReference } from "@google-cloud/firestore";
 import { makeEntry, type LedgerEntry } from "../../shared/ledger";
-import type { Session, Treasury } from "../../shared/types";
+import type { Nomination, NominationRound, Session, Treasury } from "../../shared/types";
 import {
   QuotaExceededError,
   SessionExistsError,
@@ -400,5 +400,50 @@ export class FirestoreStore implements Store {
       const d = s.data() as { total?: number; counts?: Record<string, number> } | undefined;
       return { day: days[i], total: d?.total ?? 0, counts: d?.counts ?? {} };
     });
+  }
+
+  async addNomination(n: Nomination & { email: string | null; ipHash: string }) {
+    await this.db.collection("nominations").doc(n.id).set(n);
+  }
+
+  async listNominations(scope: "public" | "all", limit: number) {
+    // Small collection; filter and sort here so no composite index is needed.
+    const snap = await this.db.collection("nominations").orderBy("at", "desc").limit(500).get();
+    return snap.docs
+      .map((d) => d.data() as Nomination & { email: string | null; ipHash: string })
+      .filter((n) => scope === "all" || n.status === "approved" || n.status === "chosen")
+      .sort((a, b) => b.votes - a.votes || b.at.localeCompare(a.at))
+      .slice(0, limit)
+      .map(({ ipHash: _ip, ...rest }) => (scope === "all" ? rest : { ...rest, email: undefined }));
+  }
+
+  async setNominationStatus(id: string, status: Nomination["status"]) {
+    const ref = this.db.collection("nominations").doc(id);
+    if (!(await ref.get()).exists) return false;
+    await ref.update({ status });
+    return true;
+  }
+
+  async upvoteNomination(id: string, vidHash: string) {
+    const ref = this.db.collection("nominations").doc(id);
+    const vote = this.db.collection("nominationVotes").doc(`${id}_${vidHash}`);
+    return this.db.runTransaction(async (tx) => {
+      const [n, v] = await tx.getAll(ref, vote);
+      const status = (n.data() as Nomination | undefined)?.status;
+      if (!n.exists || (status !== "approved" && status !== "chosen")) return "missing" as const;
+      if (v.exists) return "exists" as const;
+      tx.set(vote, { id, vidHash, at: new Date().toISOString() });
+      tx.update(ref, { votes: FieldValue.increment(1) });
+      return "created" as const;
+    });
+  }
+
+  async saveRound(round: NominationRound) {
+    await this.db.collection("nominationRounds").doc(round.month).set(round);
+  }
+
+  async latestRound() {
+    const snap = await this.db.collection("nominationRounds").orderBy("month", "desc").limit(1).get();
+    return snap.empty ? null : (snap.docs[0].data() as NominationRound);
   }
 }

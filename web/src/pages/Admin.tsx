@@ -41,6 +41,7 @@ interface Overview {
   treasury: Treasury;
   sessions: Session[];
   github: { repo: string; stars: number | null; forks: number | null; issues: number | null } | null;
+  nominations: { id: string; name: string; place: string | null; summary: string; status: string; votes: number; at: string; email?: string | null }[];
   timeZone: string;
 }
 
@@ -167,6 +168,22 @@ export function AdminPage() {
     }
   }
 
+  const [nominationNote, setNominationNote] = useState<string | null>(null);
+  async function setNomination(id: string, status: "approved" | "rejected") {
+    await api(`/api/admin/nominations/${id}`, { method: "POST", body: JSON.stringify({ status }) }).catch(() => undefined);
+    await load();
+  }
+  async function runRound() {
+    setNominationNote("The council is debating the shortlist…");
+    try {
+      await api("/api/admin/nominations-round", { method: "POST" });
+      setNominationNote("Round recorded. It's on /nominate.");
+      await load();
+    } catch (err) {
+      setNominationNote(err instanceof ApiError ? err.message : "The round failed.");
+    }
+  }
+
   async function logout() {
     await api("/api/admin/logout", { method: "POST" }).catch(() => undefined);
     setData(null);
@@ -287,6 +304,60 @@ export function AdminPage() {
           </button>
           {council ? <p className="muted" role="status">{council}</p> : null}
         </div>
+      </section>
+
+      <section className="panel" style={{ width: "auto", padding: 0 }}>
+        <div className="section-head">
+          <h2>Cause nominations</h2>
+          <button className="btn ghost small" type="button" onClick={runRound}>
+            Run the monthly round now
+          </button>
+        </div>
+        {nominationNote ? <p className="hint">{nominationNote}</p> : null}
+        {data.nominations?.length ? (
+          <div className="table-wrap">
+            <table className="data">
+              <thead>
+                <tr>
+                  <th>Submitted</th>
+                  <th>Cause</th>
+                  <th>Status</th>
+                  <th>Support</th>
+                  <th />
+                </tr>
+              </thead>
+              <tbody>
+                {data.nominations.map((n) => (
+                  <tr key={n.id}>
+                    <td className="num">{time(n.at)}</td>
+                    <td>
+                      <strong>{n.name}</strong>
+                      {n.place ? `, ${n.place}` : ""}
+                      <div className="muted">{n.summary}</div>
+                      {n.email ? <a href={`mailto:${n.email}`}>{n.email}</a> : null}
+                    </td>
+                    <td>{n.status}</td>
+                    <td className="num">{n.votes}</td>
+                    <td>
+                      {n.status !== "approved" && n.status !== "chosen" ? (
+                        <button className="btn ghost small" type="button" onClick={() => setNomination(n.id, "approved")}>
+                          Approve
+                        </button>
+                      ) : null}{" "}
+                      {n.status !== "rejected" && n.status !== "chosen" ? (
+                        <button className="btn ghost small" type="button" onClick={() => setNomination(n.id, "rejected")}>
+                          Reject
+                        </button>
+                      ) : null}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <p className="muted">No nominations yet.</p>
+        )}
       </section>
 
       <section className="panel" style={{ width: "auto", padding: 0 }}>

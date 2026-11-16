@@ -1,6 +1,6 @@
 import type { AgentId } from "../../shared/agents";
 import type { LedgerEntry } from "../../shared/ledger";
-import type { Session, TrackEvent, Treasury } from "../../shared/types";
+import type { Nomination, NominationRound, Session, TrackEvent, Treasury } from "../../shared/types";
 
 export interface DonationRecord {
   id: string;
@@ -166,6 +166,13 @@ export interface Store {
   voteArgue(day: string, vidHash: string, agentId: string): Promise<"created" | "exists">;
   argueVote(day: string, vidHash: string): Promise<string | null>;
   argueTallies(days: string[]): Promise<{ day: string; total: number; counts: Record<string, number> }[]>;
+  addNomination(n: Nomination & { email: string | null; ipHash: string }): Promise<void>;
+  /** Public list: approved and chosen nominations. Admin passes "all". */
+  listNominations(scope: "public" | "all", limit: number): Promise<(Nomination & { email?: string | null })[]>;
+  setNominationStatus(id: string, status: Nomination["status"]): Promise<boolean>;
+  upvoteNomination(id: string, vidHash: string): Promise<"created" | "exists" | "missing">;
+  saveRound(round: NominationRound): Promise<void>;
+  latestRound(): Promise<NominationRound | null>;
   /** Claims the right to score a day's predictions. True only for the first caller. */
   claimScoring(day: string): Promise<boolean>;
   listSecurity(limit: number): Promise<SecurityEvent[]>;

@@ -364,3 +364,42 @@ describe("who argued best", () => {
     expect(Object.keys(standing.agents)).toHaveLength(5);
   });
 });
+
+describe("cause nominations", () => {
+  it("keeps nominations private until approved, then takes upvotes and runs a round", async () => {
+    const { setLlm } = await import("../server/council");
+    setLlm(null);
+    const cookie = await adminCookie();
+    const nominate = (name: string) =>
+      req("/api/nominations", {
+        method: "POST",
+        ip: freshIp(),
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ name, place: "Sahel", summary: "Restoring degraded soil so farms hold water and carbon again.", elapsed: 5000 }),
+      });
+    expect((await nominate("Soil restoration")).status).toBe(201);
+    expect((await nominate("Wetland protection")).status).toBe(201);
+    expect((await req("/api/nominations", { method: "POST", ip: freshIp(), headers: { "content-type": "application/json" }, body: JSON.stringify({ name: "x", summary: "short", elapsed: 5000 }) })).status).toBe(400);
+
+    let pub = (await (await req("/api/nominations")).json()) as { nominations: { id: string }[] };
+    expect(pub.nominations).toHaveLength(0);
+
+    const overview = (await (await req("/api/admin/overview", { ip: ADMIN_IP, headers: { cookie } })).json()) as { nominations: { id: string; name: string }[] };
+    expect(overview.nominations).toHaveLength(2);
+    for (const n of overview.nominations) {
+      expect((await req(`/api/admin/nominations/${n.id}`, { method: "POST", ip: ADMIN_IP, headers: { cookie, "content-type": "application/json" }, body: JSON.stringify({ status: "approved" }) })).status).toBe(200);
+    }
+    pub = (await (await req("/api/nominations")).json()) as { nominations: { id: string }[] };
+    expect(pub.nominations).toHaveLength(2);
+    expect(JSON.stringify(pub)).not.toContain("ipHash");
+
+    const target = pub.nominations[0].id;
+    const up = (vid: string) => req(`/api/nominations/${target}/upvote`, { method: "POST", ip: freshIp(), headers: { "x-ew-vid": vid } });
+    expect((await up("supporter-aaa1")).status).toBe(201);
+    expect((await up("supporter-aaa1")).status).toBe(409);
+
+    const round = (await (await req("/api/admin/nominations-round", { method: "POST", ip: ADMIN_IP, headers: { cookie } })).json()) as { round: { winner: string; candidates: unknown[] } };
+    expect(round.round.candidates).toHaveLength(2);
+    expect(round.round.winner).toBe(target);
+  });
+});

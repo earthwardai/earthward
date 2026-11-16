@@ -352,6 +352,15 @@ export async function renderRoute(store: Store, path: string): Promise<RenderedP
       body: `<main class="page prose"><h1>${esc(ASK.title)}</h1><p class="lede">${esc(ASK.lede)}</p><h2>Questions people ask</h2><ul>${ASK.suggestions.map((q) => `<li>${esc(q)}</li>`).join("")}</ul><p>Each of the five agents (${AGENTS.map((a) => esc(a.name)).join(", ")}) answers from its own mandate, then the council gives a verdict.</p></main>`,
       jsonLd: [ORG(), crumbs(["Ask the council", "/ask"]), { "@type": "WebApplication", name: `${ASK.title} | ${SITE_NAME}`, applicationCategory: "EducationalApplication", operatingSystem: "Web", url: `${config.siteUrl}/ask`, offers: { "@type": "Offer", price: "0", priceCurrency: "USD" } }],
     };
+  if (path === "/nominate")
+    return {
+      status: 200,
+      path,
+      title: `Nominate a cause | ${SITE_NAME}`,
+      description: "Propose a cause for the Earthward AI council. Once a month the five AI agents debate the most supported nominations and recommend one.",
+      body: `<main class="page prose"><h1>Nominate a cause</h1><p class="lede">Propose a cause for the council. Approved nominations join a public shortlist, and once a month the five agents debate the most supported and recommend one.</p></main>`,
+      jsonLd: [ORG(), crumbs(["Nominate a cause", "/nominate"])],
+    };
   if (path === "/predict")
     return {
       status: 200,

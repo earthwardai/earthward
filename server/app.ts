@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { serveStatic } from "@hono/node-server/serve-static";
@@ -17,6 +17,7 @@ import { AskUnavailableError, askCouncil } from "./ask";
 import { runCouncil } from "./council";
 import { badgeSvg, embedHtml } from "./embed";
 import { councilImage, impactImage } from "./og";
+import { runNominationRound } from "./nominations";
 import { previousDay, scorePredictions, winningCauses } from "./predict";
 import { clearStanding, getStanding } from "./reputation";
 import { centroidOf, countryOf } from "./geo";
@@ -465,6 +466,66 @@ export function createApp(store: Store) {
     return c.json(await getStanding(store));
   });
 
+  // --- Cause nominations --------------------------------------------------------
+
+  const NominateSchema = z.object({
+    name: z.string().trim().min(3).max(60),
+    place: z.string().trim().max(60).optional(),
+    summary: z.string().trim().min(20).max(400),
+    email: z.string().max(160).optional(),
+    website: z.string().max(200).optional(),
+    elapsed: z.number().int().min(0).max(86_400_000),
+  });
+
+  app.post("/api/nominations", async (c) => {
+    const ip = clientIp(c);
+    if (!limiters.nominate.take(hashIp(ip))) return c.json({ error: "You've nominated a few causes already. Try again in an hour." }, 429);
+    const parsed = NominateSchema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) return c.json({ error: "Give the cause a name and a summary of at least a sentence." }, 400);
+    const b = parsed.data;
+    if (b.website) {
+      security(c, "honeypot", "nominate");
+      return c.json({ error: "This request was rejected." }, 400);
+    }
+    if (b.elapsed < 3000) return c.json({ error: "That was quicker than a person can type. Try again." }, 400);
+    const email = cleanText(b.email, 160);
+    if (email && !EMAIL.test(email)) return c.json({ error: "That email address doesn't look right." }, 400);
+    const name = stripLinks(cleanText(b.name, 60));
+    const summary = stripLinks(cleanText(b.summary, 400));
+    if (!name || !summary || summary.length < 20) return c.json({ error: "Give the cause a name and a summary of at least a sentence." }, 400);
+    if (!dailyCaps.nominations.take()) return c.json({ error: "We've had a lot of nominations today. Please try tomorrow." }, 503);
+    await store.addNomination({
+      id: randomUUID(),
+      name,
+      place: stripLinks(cleanText(b.place, 60)),
+      summary,
+      status: "pending",
+      votes: 0,
+      at: new Date().toISOString(),
+      email,
+      ipHash: hashIp(ip),
+    });
+    return c.json({ ok: true }, 201);
+  });
+
+  app.get("/api/nominations", async (c) => {
+    const [nominations, round] = await Promise.all([store.listNominations("public", 30), store.latestRound()]);
+    c.header("Cache-Control", "public, max-age=30");
+    return c.json({ nominations: nominations.map(({ email: _e, ...n }) => n), round });
+  });
+
+  app.post("/api/nominations/:id/upvote", async (c) => {
+    const id = c.req.param("id");
+    if (!/^[A-Za-z0-9-]{8,64}$/.test(id)) return c.json({ error: "Not found" }, 404);
+    if (!limiters.argue.take(hashIp(clientIp(c)))) return c.json({ error: "Too many votes from your network. Try again later." }, 429);
+    const vidHash = visitorHash(c);
+    if (!vidHash) return c.json({ error: "Your browser is blocking local storage, so we can't count your vote." }, 400);
+    const r = await store.upvoteNomination(id, vidHash);
+    if (r === "missing") return c.json({ error: "Not found" }, 404);
+    if (r === "exists") return c.json({ error: "You've already supported this one." }, 409);
+    return c.json({ ok: true }, 201);
+  });
+
   // --- Badge and embeddable card ---------------------------------------------
 
   let latestCache: { at: number; session: Awaited<ReturnType<Store["listSessions"]>>[number] | null } = { at: 0, session: null };
@@ -557,6 +618,7 @@ export function createApp(store: Store) {
       ["/global-ai-council", latest],
       ["/ask", today],
       ["/predict", today],
+      ["/nominate", today],
       ["/how-it-works", today],
       ["/ledger", latest],
       ["/about", today],
@@ -670,6 +732,9 @@ export function createApp(store: Store) {
     await store.ensureGenesis(config.genesisCredits);
     const result = await runCouncil(store, sessionDay(new Date(), config.timeZone));
     if (result.status === "created") await scorePredictions(store, result.session).catch((err) => console.error("scoring failed", err));
+    // The first session of each month also settles the nomination round.
+    const today = dayKey(new Date(), config.timeZone);
+    if (today.endsWith("-01")) await runNominationRound(store, today.slice(0, 7)).catch((err) => console.error("nomination round failed", err));
     stateCache = null;
     latestCache = { at: 0, session: null };
     pageCache.clear();
@@ -720,7 +785,7 @@ export function createApp(store: Store) {
   app.get("/api/admin/overview", async (c) => {
     const now = Date.now();
     const days = Array.from({ length: 14 }, (_, i) => dayKey(new Date(now - i * 86_400_000), config.timeZone)).reverse();
-    const [stats, visits, donations, securityEvents, treasury, sessions, messages] = await Promise.all([
+    const [stats, visits, donations, securityEvents, treasury, sessions, messages, nominations] = await Promise.all([
       store.getStats(days),
       store.listAnalytics(300),
       store.listDonations(60),
@@ -728,10 +793,24 @@ export function createApp(store: Store) {
       store.getTreasury(),
       store.listSessions(7),
       store.listMessages(50),
+      store.listNominations("all", 100),
     ]);
     await githubStars();
     const github = config.githubRepo ? { repo: config.githubRepo, stars: stars.count, forks: stars.forks ?? null, issues: stars.issues ?? null } : null;
-    return c.json({ stats, visits, donations, security: securityEvents, treasury, sessions, messages, github, timeZone: config.timeZone });
+    return c.json({ stats, visits, donations, security: securityEvents, treasury, sessions, messages, nominations, github, timeZone: config.timeZone });
+  });
+
+  app.post("/api/admin/nominations/:id", async (c) => {
+    const body = (await c.req.json().catch(() => ({}))) as { status?: string };
+    if (body.status !== "approved" && body.status !== "rejected" && body.status !== "pending") return c.json({ error: "Use approved, rejected or pending." }, 400);
+    const ok = await store.setNominationStatus(c.req.param("id"), body.status);
+    return ok ? c.json({ ok: true }) : c.json({ error: "Not found" }, 404);
+  });
+
+  app.post("/api/admin/nominations-round", async (c) => {
+    const month = dayKey(new Date(), config.timeZone).slice(0, 7);
+    const round = await runNominationRound(store, month);
+    return round ? c.json({ round }) : c.json({ error: "Approve at least two nominations first." }, 400);
   });
 
   app.post("/api/admin/council", async (c) => {

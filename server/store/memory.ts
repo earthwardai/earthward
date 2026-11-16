@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { makeEntry, type LedgerEntry } from "../../shared/ledger";
-import type { Session, Treasury } from "../../shared/types";
+import type { Nomination, NominationRound, Session, Treasury } from "../../shared/types";
 import {
   QuotaExceededError,
   SessionExistsError,
@@ -55,6 +55,9 @@ export class MemoryStore implements Store {
   private predictors = new Map<string, PredictorRecord>();
   private scored = new Set<string>();
   private argue = new Map<string, { day: string; agentId: string }>();
+  private nominations = new Map<string, Nomination & { email: string | null; ipHash: string }>();
+  private nominationVotes = new Set<string>();
+  private rounds: NominationRound[] = [];
   private analytics: AnalyticsBatch[] = [];
   private stats = new Map<string, DayStats>();
   private visitors = new Set<string>();
@@ -337,5 +340,42 @@ export class MemoryStore implements Store {
       }
       return { day, total, counts };
     });
+  }
+
+  async addNomination(n: Nomination & { email: string | null; ipHash: string }) {
+    this.nominations.set(n.id, { ...n });
+  }
+
+  async listNominations(scope: "public" | "all", limit: number) {
+    return [...this.nominations.values()]
+      .filter((n) => scope === "all" || n.status === "approved" || n.status === "chosen")
+      .sort((a, b) => b.votes - a.votes || b.at.localeCompare(a.at))
+      .slice(0, limit)
+      .map(({ ipHash: _ip, ...rest }) => (scope === "all" ? rest : { ...rest, email: undefined }));
+  }
+
+  async setNominationStatus(id: string, status: Nomination["status"]) {
+    const n = this.nominations.get(id);
+    if (!n) return false;
+    n.status = status;
+    return true;
+  }
+
+  async upvoteNomination(id: string, vidHash: string) {
+    const n = this.nominations.get(id);
+    if (!n || (n.status !== "approved" && n.status !== "chosen")) return "missing" as const;
+    const key = `${id}_${vidHash}`;
+    if (this.nominationVotes.has(key)) return "exists" as const;
+    this.nominationVotes.add(key);
+    n.votes += 1;
+    return "created" as const;
+  }
+
+  async saveRound(round: NominationRound) {
+    this.rounds = [...this.rounds.filter((r) => r.month !== round.month), round];
+  }
+
+  async latestRound() {
+    return [...this.rounds].sort((a, b) => b.month.localeCompare(a.month))[0] ?? null;
   }
 }

@@ -2738,3 +2738,35 @@ textarea.text-input {
   height: 100%;
   background: var(--agent);
 }
+
+/* --- Nominations ------------------------------------------------------------ */
+
+.nominations {
+  display: grid;
+  gap: 0;
+  max-width: 860px;
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.nominations li {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 0;
+  border-bottom: 1px solid var(--hair);
+}
+.nominations p {
+  margin: 0 0 4px;
+}
+.nom-name {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  font-weight: 500;
+}
+.round {
+  margin-top: 32px;
+}
