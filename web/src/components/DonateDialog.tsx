@@ -8,9 +8,9 @@ import { Sigil } from "./Sigil";
 
 const PRESETS = [10, 50, 100, 250];
 
-let openDialog: (() => void) | null = null;
-/** Opens the donate dialog from anywhere on the page. */
-export const openDonate = () => openDialog?.();
+let openDialog: ((agent?: AgentId) => void) | null = null;
+/** Opens the donate dialog from anywhere on the page, optionally with an agent already chosen. */
+export const openDonate = (agent?: unknown) => openDialog?.(typeof agent === "string" ? (agent as AgentId) : undefined);
 
 export function DonateDialog() {
   const ref = useRef<HTMLDialogElement>(null);
@@ -27,9 +27,10 @@ export function DonateDialog() {
   const now = useNow();
 
   useEffect(() => {
-    openDialog = () => {
+    openDialog = (preset) => {
       setError(null);
       setReceipt(null);
+      if (preset) setAgent(preset);
       openedAt.current = Date.now();
       ref.current?.showModal();
     };

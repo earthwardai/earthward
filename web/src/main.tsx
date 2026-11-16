@@ -6,6 +6,7 @@ import { StrictMode, useEffect } from "react";
 import { AGENTS } from "../../shared/agents";
 import { createRoot } from "react-dom/client";
 import { Link, Route, Switch, useLocation } from "wouter";
+import { ChangelogPage, ClassroomPage, MatchPage, PressPage, StatusPage } from "./pages/Product";
 import { DonateDialog, openDonate } from "./components/DonateDialog";
 import { ago, useLiveState, useNow, useTheme } from "./lib";
 import { AdminPage } from "./pages/Admin";
@@ -112,36 +113,65 @@ function Footer() {
               <Link href="/how-it-works">How it works</Link>
             </li>
             <li>
-              <a href="/#council">The council</a>
+              <a href="/#council">Tonight's council</a>
+            </li>
+            <li>
+              <Link href="/match">Which agent are you?</Link>
+            </li>
+            <li>
+              <Link href="/predict">Predict tonight</Link>
+            </li>
+            <li>
+              <Link href="/ask">Ask the council</Link>
             </li>
             <li>
               <Link href="/ledger">Ledger</Link>
             </li>
             <li>
-              <a href="/#faq">Questions</a>
+              <Link href="/digest">Email updates</Link>
+            </li>
+            <li>
+              <Link href="/changelog">What's new</Link>
             </li>
           </ul>
         </nav>
         <nav aria-labelledby="f-explore">
-          <h2 id="f-explore">Explore</h2>
+          <h2 id="f-explore">For groups</h2>
           <ul>
             <li>
-              <Link href="/earth-ai">Earth AI</Link>
+              <Link href="/councils">Run a council for your group</Link>
+            </li>
+            <li>
+              <Link href="/classroom">For classrooms</Link>
             </li>
             <li>
               <Link href="/nominate">Nominate a cause</Link>
             </li>
             <li>
-              <Link href="/councils">Run a council for your group</Link>
+              <Link href="/developers">Developers and API</Link>
             </li>
             <li>
-              <Link href="/global-ai-council">Global AI council</Link>
+              <a href="/feed.xml">Minutes feed (RSS)</a>
             </li>
+            <li>
+              <Link href="/es">Español</Link> · <Link href="/hi">हिन्दी</Link>
+            </li>
+          </ul>
+        </nav>
+        <nav aria-labelledby="f-agents">
+          <h2 id="f-agents">The agents</h2>
+          <ul>
             {AGENTS.map((a) => (
               <li key={a.id}>
                 <Link href={`/agents/${a.id}`}>{a.name}</Link>
               </li>
             ))}
+            <li>
+              <Link href="/earth-ai">Earth AI</Link>
+            </li>
+            <li>
+              <Link href="/global-ai-council">Global AI council</Link>
+            </li>
           </ul>
         </nav>
         <nav aria-labelledby="f-company">
@@ -154,13 +184,10 @@ function Footer() {
               <Link href="/contact">Contact and feedback</Link>
             </li>
             <li>
-              <Link href="/developers">Developers and API</Link>
+              <Link href="/press">Press kit</Link>
             </li>
             <li>
-              <Link href="/es">Español</Link> · <Link href="/hi">हिन्दी</Link>
-            </li>
-            <li>
-              <a href="/feed.xml">Minutes feed (RSS)</a>
+              <Link href="/status">Status</Link>
             </li>
             <li>
               <a href="https://github.com/earthwardai/earthward" target="_blank" rel="noopener" data-track="footer-github">
@@ -246,6 +273,11 @@ function App() {
         <Route path="/hi">{() => <LocalePage lang="hi" />}</Route>
         <Route path="/c/:id">{(p) => <GroupPage id={p.id} />}</Route>
         <Route path="/impact/:id">{(p) => <ImpactPage id={p.id} />}</Route>
+        <Route path="/match" component={MatchPage} />
+        <Route path="/changelog" component={ChangelogPage} />
+        <Route path="/classroom" component={ClassroomPage} />
+        <Route path="/press" component={PressPage} />
+        <Route path="/status" component={StatusPage} />
         <Route path="/admin" component={AdminPage} />
         <Route component={NotFound} />
       </Switch>

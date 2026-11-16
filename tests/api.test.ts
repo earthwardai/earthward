@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { RULES } from "../shared/council";
 import { verifyEntries, type LedgerEntry } from "../shared/ledger";
 import type { StateResponse } from "../shared/types";
@@ -473,5 +473,104 @@ describe("client address behind Cloudflare", () => {
     expect(clientIp(ctx({ "cf-connecting-ip": "10.0.0.1", "x-forwarded-for": "172.70.1.1, 198.51.100.9" }))).toBe("198.51.100.9");
     expect(clientIp(ctx({ "cf-connecting-ip": "not-an-ip", "x-forwarded-for": "172.70.1.1" }))).toBe("172.70.1.1");
     expect(clientIp(ctx({ "x-forwarded-for": "198.51.100.9" }))).toBe("198.51.100.9");
+  });
+});
+
+describe("status", () => {
+  it("reports the council as late until it has met", async () => {
+    const res = await req("/api/status");
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { status: string; council: { ok: boolean }; ledger: { entries: number }; services: Record<string, boolean> };
+    expect(body.status).toBe("degraded");
+    expect(body.council.ok).toBe(false);
+    expect(body.ledger.entries).toBe(1);
+    expect(body.services.website).toBe(true);
+  });
+});
+
+describe("email", () => {
+  type Sent = { to: string; subject: string; text: string; html?: string; replyTo?: string };
+  let sent: Sent[] = [];
+  let store: MemoryStore;
+  const json = (path: string, body: unknown, ip = freshIp()) => req(path, { method: "POST", ip, headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+
+  beforeEach(async () => {
+    const { config } = await import("../server/config");
+    const { setMailTransport } = await import("../server/notify");
+    (config.smtp as { user: string; pass: string }).user = "ved@earthwardai.com";
+    (config.smtp as { user: string; pass: string }).pass = "test-only";
+    sent = [];
+    setMailTransport({ sendMail: async (m: Sent) => (sent.push(m), { messageId: "x" }) } as never);
+    store = new MemoryStore();
+    await store.ensureGenesis(10_000);
+    app = createApp(store);
+  });
+
+  afterEach(async () => {
+    const { config } = await import("../server/config");
+    const { setMailTransport } = await import("../server/notify");
+    (config.smtp as { user: string; pass: string }).user = "";
+    (config.smtp as { user: string; pass: string }).pass = "";
+    setMailTransport(null);
+  });
+
+  it("subscribes with double opt-in that a link scanner can't complete", async () => {
+    expect((await json("/api/notify/digest", { email: "Reader@Example.com", frequency: "daily" })).status).toBe(201);
+    expect(sent).toHaveLength(1);
+    expect(sent[0].subject).toContain("nightly");
+    const token = /confirm=([A-Za-z0-9_-]+)/.exec(sent[0].text)![1];
+
+    // Following the link only opens the page; nothing is confirmed yet.
+    const visit = await req(`/api/notify/digest/confirm?t=${token}`);
+    expect(visit.status).toBe(302);
+    expect(visit.headers.get("location")).toBe(`/digest?confirm=${token}`);
+    expect(((await (await req(`/api/notify/subscription?t=${token}`)).json()) as { status: string }).status).toBe("pending");
+
+    expect((await json("/api/notify/digest/confirm", { t: token })).status).toBe(200);
+    const sub = (await (await req(`/api/notify/subscription?t=${token}`)).json()) as { status: string; frequency: string; email: string };
+    expect(sub).toMatchObject({ status: "active", frequency: "daily" });
+    expect(sub.email).not.toContain("reader@");
+  });
+
+  it("sends the nightly email to daily subscribers, personal to their prediction", async () => {
+    const { sendNightlyEmails, sendDigest } = await import("../server/notify");
+    const { hashId } = await import("../server/security");
+    await req("/api/notify/digest", { method: "POST", ip: freshIp(), headers: { "content-type": "application/json", "x-ew-vid": "visitor-1234" }, body: JSON.stringify({ email: "night@example.com", frequency: "daily" }) });
+    const token = /confirm=([A-Za-z0-9_-]+)/.exec(sent[0].text)![1];
+    await json("/api/notify/digest/confirm", { t: token });
+    await store.predict({ day: "2026-11-20", vidHash: hashId("visitor-1234"), causeId: "water", name: null, at: new Date().toISOString() } as never);
+    const session = { day: "2026-11-20", title: "Water leads", minutes: "The council met. Water won.", spent: 500, allocations: [{ causeId: "water", share: 0.3, credits: 150, units: 12 }, { causeId: "reefs", share: 0.2, credits: 100, units: 1 }] } as never;
+
+    sent = [];
+    expect(await sendNightlyEmails(store, session)).toBe(1);
+    expect(sent[0].subject).toBe("You called it: Water leads");
+    expect(sent[0].html).toContain("Every.org");
+    expect(sent[0].text).toContain(`/digest?manage=${token}`);
+
+    // Switching to weekly moves them from the nightly email to the Monday roundup.
+    await json("/api/notify/subscription", { t: token, frequency: "weekly" });
+    sent = [];
+    expect(await sendNightlyEmails(store, session)).toBe(0);
+    expect(await sendDigest(store)).toBe(1);
+  });
+
+  it("only unsubscribes on a button press or a mail client's one-click POST", async () => {
+    await json("/api/notify/digest", { email: "leave@example.com" });
+    const token = /confirm=([A-Za-z0-9_-]+)/.exec(sent[0].text)![1];
+    await json("/api/notify/digest/confirm", { t: token });
+    const visit = await req(`/api/notify/digest/unsubscribe?t=${token}`);
+    expect(visit.headers.get("location")).toBe(`/digest?manage=${token}&leave=1`);
+    expect(await store.findSubscriber(token)).not.toBeNull();
+    await req(`/api/notify/digest/unsubscribe?t=${token}`, { method: "POST" });
+    expect(await store.findSubscriber(token)).toBeNull();
+  });
+
+  it("forwards messages to the team inbox with the visitor as reply-to", async () => {
+    const r = await json("/api/contact", { kind: "bug", name: "Asha", email: "asha@example.com", message: "The ledger page froze on my phone.", elapsed: 5000 });
+    expect(r.status).toBe(201);
+    expect(sent).toHaveLength(1);
+    expect(sent[0]).toMatchObject({ to: "ved@earthwardai.com", replyTo: "asha@example.com" });
+    expect(sent[0].subject).toContain("Something's broken from Asha");
+    expect(sent[0].text).toContain("The ledger page froze");
   });
 });

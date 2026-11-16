@@ -207,3 +207,16 @@ describe("model arena", () => {
     expect((await store.getArena("2026-11-20"))?.entries).toHaveLength(2);
   });
 });
+
+describe("which agent are you?", () => {
+  it("scores answers into percentages that favour the agent picked most", async () => {
+    const { QUIZ, scoreQuiz } = await import("../shared/product");
+    // Pick Hearth's option on every question.
+    const hearth = QUIZ.questions.map((q) => q.options.findIndex((o) => (o.points.hearth ?? 0) === 2));
+    const result = scoreQuiz(hearth);
+    expect(result[0].agentId).toBe("hearth");
+    expect(result.reduce((s, r) => s + r.pct, 0)).toBeGreaterThanOrEqual(98);
+    // Every question offers each agent as a main match exactly once.
+    for (const q of QUIZ.questions) expect(new Set(q.options.map((o) => Object.entries(o.points).find(([, n]) => n === 2)![0])).size).toBe(5);
+  });
+});

@@ -32,6 +32,8 @@ export interface AnalyticsBatch {
   ipHash: string;
   country: string | null;
   ua: string;
+  /** For questions put to the council: its verdict, so the inbox shows what the visitor saw. */
+  answer?: string | null;
   vid: string;
   sid: string;
   events: TrackEvent[];
@@ -82,7 +84,7 @@ export interface SecurityEvent {
 
 export interface ContactMessage {
   at: string;
-  /** suggestion, question, feedback, bug or partnership. */
+  /** suggestion, question, feedback, bug, partnership, or "ask" for a question put to the council. */
   kind?: string;
   /** The page the visitor was on when they wrote. */
   page?: string | null;
@@ -93,6 +95,8 @@ export interface ContactMessage {
   ipHash: string;
   country: string | null;
   ua: string;
+  /** For questions put to the council: its verdict, so the inbox shows what the visitor saw. */
+  answer?: string | null;
 }
 
 /** One visitor's guess at which cause will top tonight's decision. */
@@ -153,7 +157,13 @@ export interface SubscriberRecord {
   token: string;
   createdAt: string;
   confirmedAt: string | null;
+  /** "daily" gets each night's decision, "weekly" the Monday roundup. Older records are weekly. */
+  frequency?: EmailFrequency;
+  /** Links the subscriber to their predictions, so the nightly email can say whether they were right. */
+  vidHash?: string | null;
 }
+
+export type EmailFrequency = "daily" | "weekly";
 
 export type PledgeResult = "ok" | "duplicate" | "full" | "missing";
 /** Members who can back an agent between two sessions of one group council. */
@@ -234,6 +244,7 @@ export interface Store {
   upsertSubscriber(sub: SubscriberRecord): Promise<SubscriberRecord>;
   findSubscriber(token: string): Promise<SubscriberRecord | null>;
   activateSubscriber(id: string): Promise<void>;
+  setSubscriberFrequency(id: string, frequency: EmailFrequency): Promise<void>;
   deleteSubscriber(id: string): Promise<void>;
   listActiveSubscribers(limit: number): Promise<SubscriberRecord[]>;
   countSubscribers(): Promise<number>;

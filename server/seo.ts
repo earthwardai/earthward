@@ -1,3 +1,4 @@
+import { CHANGELOG, CLASSROOM, PRESS, QUIZ } from "../shared/product";
 import { AGENTS, agentById } from "../shared/agents";
 import { CAUSES, causeById } from "../shared/causes";
 import { ABOUT, ALT_NAMES, ASK, DEFINITION, DOMAIN_LABELS, EARTH_AI, GLOBAL_AI, HEADLINE, SITE_NAME, SUMMARY, faq } from "../shared/content";
@@ -413,9 +414,9 @@ export async function renderRoute(store: Store, path: string): Promise<RenderedP
       status: 200,
       path,
       noindex: true,
-      title: `The weekly digest | ${SITE_NAME}`,
-      description: "Every decision the Earthward AI council made this week, in one email.",
-      body: `<main class="page prose"><h1>The weekly digest</h1><p class="lede">Every decision the council made this week, in one email.</p></main>`,
+      title: `Email updates | ${SITE_NAME}`,
+      description: "The Earthward AI council's decisions in your inbox, every night or once a week.",
+      body: `<main class="page prose"><h1>Email updates</h1><p class="lede">The council's decision in your inbox, every night or once a week.</p></main>`,
       jsonLd: [ORG()],
     };
   if (path === "/developers")
@@ -426,6 +427,56 @@ export async function renderRoute(store: Store, path: string): Promise<RenderedP
       description: "Open data on every decision the Earthward AI council makes, an OpenAPI 3.1 description, and a free API key to ask its five AI agents questions from your own app.",
       body: `<main class="page prose"><h1>Build on the council</h1><p class="lede">Every decision the council makes is open data. Read it with no key, or get a free key to ask the five agents questions from your own app.</p><ul><li>GET /api/v1/council</li><li>GET /api/v1/state</li><li>GET /api/v1/sessions</li><li>GET /api/v1/sessions/latest</li><li>GET /api/v1/ledger</li><li>POST /api/v1/ask</li></ul><p><a href="/api/v1/openapi.json">OpenAPI description</a></p></main>`,
       jsonLd: [ORG(), crumbs(["Developers", "/developers"]), { "@type": "WebAPI", name: "Earthward AI public API", documentation: `${config.siteUrl}/developers`, url: `${config.siteUrl}/api/v1`, provider: { "@type": "Organization", name: SITE_NAME } }],
+    };
+  if (path === "/match")
+    return {
+      status: 200,
+      path,
+      title: `${QUIZ.title} Take the one-minute quiz | ${SITE_NAME}`,
+      description: QUIZ.lede,
+      body: `<main class="page prose"><h1>${esc(QUIZ.title)}</h1><p class="lede">${esc(QUIZ.lede)}</p><ol>${QUIZ.questions.map((q) => `<li>${esc(q.q)}</li>`).join("")}</ol><h2>The five agents</h2><ul>${AGENTS.map((a) => `<li><a href="/agents/${a.id}">${esc(a.name)}</a>: ${esc(a.mandate)}</li>`).join("")}</ul></main>`,
+      jsonLd: [ORG(), crumbs(["Which agent are you?", "/match"]), { "@type": "Quiz", name: QUIZ.title, about: "Values and priorities for giving", url: `${config.siteUrl}/match`, educationalUse: "self assessment" }],
+    };
+  if (path === "/changelog")
+    return {
+      status: 200,
+      path,
+      title: `What's new | ${SITE_NAME}`,
+      description: "Everything shipped on Earthward AI, newest first.",
+      body: `<main class="page prose"><h1>What's new</h1>${CHANGELOG.map((r) => `<section><p>${esc(r.date)}</p><h2>${esc(r.title)}</h2><ul>${r.items.map((i) => `<li>${esc(i)}</li>`).join("")}</ul></section>`).join("")}</main>`,
+      jsonLd: [ORG(), crumbs(["What's new", "/changelog"])],
+    };
+  if (path === "/classroom")
+    return {
+      status: 200,
+      path,
+      title: `${CLASSROOM.title}: a free 45-minute lesson on AI and fairness | ${SITE_NAME}`,
+      description: CLASSROOM.lede,
+      body: `<main class="page prose"><h1>${esc(CLASSROOM.title)}</h1><p class="lede">${esc(CLASSROOM.lede)}</p>${CLASSROOM.why.map((w) => `<h2>${esc(w.h)}</h2><p>${esc(w.p)}</p>`).join("")}<h2>A 45-minute lesson</h2><ol>${CLASSROOM.plan.map((x) => `<li><strong>${esc(x.h)} (${esc(x.t)})</strong>: ${esc(x.p)}</li>`).join("")}</ol><h2>Questions for the discussion</h2><ul>${CLASSROOM.questions.map((q) => `<li>${esc(q)}</li>`).join("")}</ul><p><a href="/councils">Set up a council for your class</a></p></main>`,
+      jsonLd: [
+        ORG(),
+        crumbs(["For classrooms", "/classroom"]),
+        { "@type": "LearningResource", name: CLASSROOM.title, description: CLASSROOM.lede, url: `${config.siteUrl}/classroom`, timeRequired: "PT45M", learningResourceType: "Lesson plan", isAccessibleForFree: true, educationalLevel: "Secondary school, university" },
+        { "@type": "FAQPage", mainEntity: CLASSROOM.faq.map((f) => ({ "@type": "Question", name: f.q, acceptedAnswer: { "@type": "Answer", text: f.a } })) },
+      ],
+    };
+  if (path === "/press")
+    return {
+      status: 200,
+      path,
+      title: `Press kit | ${SITE_NAME}`,
+      description: PRESS.oneLiner,
+      body: `<main class="page prose"><h1>${esc(PRESS.title)}</h1><p class="lede">${esc(PRESS.lede)}</p><h2>In one line</h2><p>${esc(PRESS.oneLiner)}</p><h2>In a paragraph</h2><p>${esc(PRESS.boilerplate)}</p><dl>${PRESS.facts.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join("")}</dl><p>Contact: ${esc(PRESS.contact)}</p></main>`,
+      jsonLd: [ORG(), crumbs(["Press kit", "/press"])],
+    };
+  if (path === "/status")
+    return {
+      status: 200,
+      path,
+      title: `Status | ${SITE_NAME}`,
+      description: "Whether Earthward AI is up and the council met on schedule.",
+      body: `<main class="page prose"><h1>Status</h1><p class="lede">Whether the site is up and the council met on schedule.</p></main>`,
+      jsonLd: [ORG()],
     };
   if (path === "/predict")
     return {
@@ -518,6 +569,9 @@ ${SITE_NAME} runs at ${u}. The council meets every night at 00:05 India Standard
 - [Council minutes feed](${u}/feed.xml): RSS of every session.
 - [Developers](${u}/developers): free JSON API. Read with no key: ${u}/api/v1/sessions/latest, ${u}/api/v1/council, ${u}/api/v1/ledger. OpenAPI: ${u}/api/v1/openapi.json.
 - [Run your own council](${u}/councils): a council for a class, team or neighbourhood, from a shareable link.
+- [For classrooms](${u}/classroom): a free 45-minute lesson plan on AI, values and fair decisions.
+- [Which agent are you?](${u}/match): a one-minute quiz matching you to one of the five agents.
+- [What's new](${u}/changelog), [Status](${u}/status), [Press kit](${u}/press).
 
 ## Recent sessions
 

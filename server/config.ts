@@ -35,13 +35,17 @@ export const config = {
   /** Web push. The private key comes from Secret Manager; without both, push is off. */
   vapidPublicKey: env.VAPID_PUBLIC_KEY ?? "",
   vapidPrivateKey: env.VAPID_PRIVATE_KEY ?? "",
-  /** The weekly digest's SMTP account. Without SMTP_PASS, the digest is off and its sign-up is hidden. */
+  /** The mailbox the site sends from. Without SMTP_PASS, every email is off and the sign-up is hidden. */
   smtp: {
     host: env.SMTP_HOST ?? "smtpout.secureserver.net",
     port: Number(env.SMTP_PORT ?? 465),
     user: env.SMTP_USER ?? "",
     pass: env.SMTP_PASS ?? "",
     from: env.DIGEST_FROM ?? "Earthward AI <ved@earthwardai.com>",
+    /** Where feedback and questions from visitors are forwarded. */
+    inbox: env.INBOX_EMAIL ?? "ved@earthwardai.com",
+    /** GoDaddy mailboxes accept only a few hundred messages a day; stay under it. */
+    dailyLimit: Number(env.EMAIL_DAILY_LIMIT ?? 300),
   },
   arenaModels: list(env.ARENA_MODELS ?? (env.GOOGLE_CLOUD_PROJECT ? "gemini-3.5-flash-lite" : "")),
   genesisCredits: Number(env.GENESIS_CREDITS ?? 10000),

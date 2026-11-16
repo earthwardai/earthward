@@ -18,6 +18,7 @@ import {
   type ApiKeyRecord,
   type GroupRecord,
   type PushSubRecord,
+  type EmailFrequency,
   type SubscriberRecord,
   type PledgeResult,
   GROUP_PLEDGE_LIMIT,
@@ -483,6 +484,11 @@ export class MemoryStore implements Store {
   async activateSubscriber(id: string) {
     const s = this.subscribers.get(id);
     if (s) this.subscribers.set(id, { ...s, status: "active", confirmedAt: new Date().toISOString() });
+  }
+
+  async setSubscriberFrequency(id: string, frequency: EmailFrequency) {
+    const s = this.subscribers.get(id);
+    if (s) this.subscribers.set(id, { ...s, frequency });
   }
 
   async deleteSubscriber(id: string) {

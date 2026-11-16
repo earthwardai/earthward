@@ -244,6 +244,16 @@ export function Home() {
       <section className="more" aria-labelledby="more-title">
         <h2 id="more-title">More to do here</h2>
         <div className="more-grid">
+          <Link href="/match" className="more-card" data-track="more-match">
+            <span className="more-kicker">One-minute quiz</span>
+            <strong>Which agent are you?</strong>
+            <span className="muted">Five questions about what you care about. Find the agent that thinks like you, then back it tonight.</span>
+          </Link>
+          <Link href={session ? `/council/${session.day}#whatif-title` : "/how-it-works"} className="more-card" data-track="more-whatif">
+            <span className="more-kicker">Your turn</span>
+            <strong>Cast the deciding vote</strong>
+            <span className="muted">Reweight the five agents and rerun last night with the council's own rules.</span>
+          </Link>
           <Link href="/councils" className="more-card" data-track="more-councils">
             <span className="more-kicker">For your class, team or street</span>
             <strong>Run your own AI council</strong>
@@ -258,6 +268,11 @@ export function Home() {
             <span className="more-kicker">Real organisations</span>
             <strong>Give for real</strong>
             <span className="muted">Every cause links to an established charity doing the work, through a nonprofit platform.</span>
+          </Link>
+          <Link href="/classroom" className="more-card" data-track="more-classroom">
+            <span className="more-kicker">For teachers</span>
+            <strong>A 45-minute lesson on AI and fairness</strong>
+            <span className="muted">A ready-made lesson plan: your class backs agents, the council debates, everyone discusses.</span>
           </Link>
           <Link href="/developers" className="more-card" data-track="more-api">
             <span className="more-kicker">Open data</span>

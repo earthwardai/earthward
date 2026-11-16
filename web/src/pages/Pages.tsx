@@ -15,6 +15,7 @@ import { FeedbackForm } from "../components/Feedback";
 import { DebateReplay } from "../components/DebateReplay";
 import { ArgueVote } from "../components/ArgueVote";
 import { ModelArena } from "../components/ModelArena";
+import { WhatIf } from "../components/WhatIf";
 import { GiveDirectly } from "../components/GiveDirectly";
 
 export function LedgerPage() {
@@ -157,6 +158,7 @@ export function SessionPage({ day }: { day: string }) {
               );
             })}
           </div>
+          <WhatIf session={session} />
           <div style={{ marginTop: 48 }}>
             <Share path={`/council/${session.day}`} campaign="minutes" text={`The Earthward AI council just decided: ${session.title}. See how each agent voted.`} label="Share these minutes" />
           </div>
@@ -195,13 +197,24 @@ export function PrivacyPage() {
         <li>Which pages you view, what you click, how far you scroll and how long you stay.</li>
         <li>A random visitor id stored in your browser so repeat visits can be counted once.</li>
         <li>Anything you type when you donate: the amount, an optional name and an optional note.</li>
+        <li>Questions you ask the council, and messages you send us, with the email address you leave for a reply.</li>
+        <li>Your email address if you subscribe to updates, and how often you want them.</li>
       </ul>
       <h2>Why</h2>
       <p>To keep the simulation fair and free of abuse (rate limits and daily caps work per address), and to understand how people use the site so we can improve it.</p>
       <h2>What is public</h2>
       <p>Each donation's amount, the name and note you choose, the agent you back and your country appear on the public ledger and feed. Your IP address is never shown; donations store only a keyed one-way hash of it.</p>
+      <h2>Email</h2>
+      <p>
+        Messages and questions are forwarded to the Earthward team's inbox (ved@earthwardai.com) so a person can read and answer them. We email you only to reply to something you sent, or with the
+        updates you subscribed to. Subscribing needs a confirmation click, every update has a link to change how often or unsubscribe, and unsubscribing deletes your address. We never sell or share
+        email addresses.
+      </p>
       <h2>How long we keep it</h2>
-      <p>Visit and click records, including IP addresses, are deleted automatically after 30 days. Ledger entries are permanent, because the chain depends on them.</p>
+      <p>
+        Visit and click records, including IP addresses, are deleted automatically after 30 days. Messages and questions are deleted after 180 days. Ledger entries are permanent, because the chain
+        depends on them. To have anything else deleted sooner, write to ved@earthwardai.com.
+      </p>
       <h2>Opting out</h2>
       <p>If your browser sends Global Privacy Control or Do Not Track, we record no visit or click data for you. The site uses no third-party trackers, advertising cookies or analytics services.</p>
       <h2>Credits</h2>

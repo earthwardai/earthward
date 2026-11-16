@@ -14,11 +14,12 @@ function keyBytes(base64url: string): Uint8Array<ArrayBuffer> {
 
 const pushSupported = () => typeof window !== "undefined" && "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
 
-/** Push after each night and a weekly email. Each part shows only once it is switched on. */
+/** Push after each night, and a nightly or weekly email. Each part shows only once it is switched on. */
 export function StayInTouch({ title = "Hear how it ends", compact = false }: { title?: string; compact?: boolean }) {
   const [cfg, setCfg] = useState<Config | null>(null);
   const [push, setPush] = useState<"off" | "on" | "busy" | "blocked">("off");
   const [email, setEmail] = useState("");
+  const [frequency, setFrequency] = useState<"daily" | "weekly">("daily");
   const [mail, setMail] = useState<{ state: "idle" | "busy" | "sent" | "error"; text?: string }>({ state: "idle" });
 
   useEffect(() => {
@@ -63,7 +64,7 @@ export function StayInTouch({ title = "Hear how it ends", compact = false }: { t
     const trap = new FormData(e.currentTarget).get("website");
     setMail({ state: "busy" });
     try {
-      await api("/api/notify/digest", { method: "POST", body: JSON.stringify({ email, website: typeof trap === "string" && trap ? trap : undefined }) });
+      await api("/api/notify/digest", { method: "POST", body: JSON.stringify({ email, frequency, website: typeof trap === "string" && trap ? trap : undefined }) });
       setMail({ state: "sent" });
     } catch (err) {
       setMail({ state: "error", text: err instanceof ApiError ? err.message : "That didn't go through. Try again." });
@@ -93,20 +94,31 @@ export function StayInTouch({ title = "Hear how it ends", compact = false }: { t
         ) : null}
         {cfg.digest ? (
           <div className="stay-card">
-            <p className="stay-head">Once a week</p>
-            <p className="muted">Every decision, the closest calls and the prediction leaderboard, in one email.</p>
+            <p className="stay-head">By email</p>
+            <p className="muted">The council's decision in your inbox, and whether your prediction was right. Unsubscribe from any email.</p>
             {mail.state === "sent" ? (
               <p className="form-ok" role="status">
                 Check your inbox for a confirmation link.
               </p>
             ) : (
               <form className="stay-form" onSubmit={subscribe}>
+                <fieldset className="stay-freq">
+                  <legend className="visually-hidden">How often</legend>
+                  <label className="chip">
+                    <input type="radio" name="freq" value="daily" checked={frequency === "daily"} onChange={() => setFrequency("daily")} />
+                    <span>Every night</span>
+                  </label>
+                  <label className="chip">
+                    <input type="radio" name="freq" value="weekly" checked={frequency === "weekly"} onChange={() => setFrequency("weekly")} />
+                    <span>Once a week</span>
+                  </label>
+                </fieldset>
                 <input type="text" name="website" tabIndex={-1} autoComplete="off" className="hp" aria-hidden="true" />
                 <label className="visually-hidden" htmlFor="stay-email">
                   Email
                 </label>
                 <input id="stay-email" className="text-input" type="email" required placeholder="you@example.com" value={email} onChange={(e) => setEmail(e.target.value)} />
-                <button className="btn small" type="submit" disabled={mail.state === "busy"} data-track="digest-subscribe">
+                <button className="btn small" type="submit" disabled={mail.state === "busy"} data-track={`email-subscribe-${frequency}`}>
                   Subscribe
                 </button>
                 {mail.state === "error" ? <p className="form-error">{mail.text}</p> : null}

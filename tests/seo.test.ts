@@ -26,6 +26,17 @@ describe("pages for crawlers and answer engines", () => {
     expect(html).toContain("10,000 credits in the treasury now");
   });
 
+  it("serves the classroom guide, quiz and press kit as indexable pages", async () => {
+    const classroom = await (await get("/classroom")).text();
+    expect(classroom).toContain("<h1>An AI council for your classroom</h1>");
+    expect(classroom).toContain('"@type":"LearningResource"');
+    expect(classroom).toContain('"@type":"FAQPage"');
+    expect(await (await get("/match")).text()).toContain("You have one free Saturday to help.");
+    expect(await (await get("/press")).text()).toContain("ved@earthwardai.com");
+    const sitemap = await (await get("/sitemap.xml")).text();
+    for (const u of ["/classroom", "/match", "/changelog", "/press"]) expect(sitemap).toContain(`https://earthwardai.com${u}</loc>`);
+  });
+
   it("serves Spanish and Hindi pages that point at each other", async () => {
     const es = await (await get("/es")).text();
     expect(es).toContain('<html lang="es">');

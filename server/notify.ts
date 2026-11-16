@@ -4,20 +4,22 @@ import nodemailer from "nodemailer";
 import * as webpush from "web-push";
 import { z } from "zod";
 import { causeById } from "../shared/causes";
+import { givingFor } from "../shared/giving";
 import type { Session } from "../shared/types";
 import { config } from "./config";
 import { winningCauses } from "./predict";
-import { cleanText, clientIp, dailyCaps, hashId, hashIp, limiters } from "./security";
-import type { PushSubRecord, Store, SubscriberRecord } from "./store/types";
+import { cleanText, clientIp, DailyCap, dailyCaps, hashId, hashIp, limiters } from "./security";
+import type { EmailFrequency, PushSubRecord, Store, SubscriberRecord } from "./store/types";
 
 /**
- * Bringing people back: web push after each night ("you called it") and a weekly email digest.
- * Push needs VAPID keys and the digest needs an SMTP password; each is off until configured.
+ * Bringing people back: web push after each night ("you called it"), a nightly or weekly email, and
+ * visitors' messages forwarded to the team. Push needs VAPID keys and email needs an SMTP password;
+ * each is off until configured.
  */
 
 const sha = (s: string) => createHash("sha256").update(s).digest("hex");
 export const pushEnabled = () => Boolean(config.vapidPublicKey && config.vapidPrivateKey);
-export const digestEnabled = () => Boolean(config.smtp.user && config.smtp.pass);
+export const emailEnabled = () => Boolean(config.smtp.user && config.smtp.pass);
 
 // Push endpoints come from the browser, and the server later POSTs to them. Only the real push
 // services are accepted, so a forged subscription can't point the server at anything else.
@@ -82,6 +84,10 @@ export async function pushNightly(store: Store, session: Session): Promise<numbe
 // --- Email -------------------------------------------------------------------
 
 let transport: ReturnType<typeof nodemailer.createTransport> | null = null;
+/** Tests swap in a transport that records messages instead of sending them. */
+export function setMailTransport(t: ReturnType<typeof nodemailer.createTransport> | null) {
+  transport = t;
+}
 function mailer() {
   transport ??= nodemailer.createTransport({
     host: config.smtp.host,
@@ -96,15 +102,29 @@ function mailer() {
   return transport;
 }
 
+type Mail = Parameters<ReturnType<typeof nodemailer.createTransport>["sendMail"]>[0];
+const mailBudget = new DailyCap(config.smtp.dailyLimit);
+
+/** Sends one email within the mailbox's daily allowance. False when email is off or the allowance is spent. */
+async function send(mail: Mail): Promise<boolean> {
+  if (!emailEnabled()) return false;
+  if (!mailBudget.take()) {
+    console.warn("email skipped: daily sending limit reached");
+    return false;
+  }
+  await mailer().sendMail({ from: config.smtp.from, ...mail });
+  return true;
+}
+
 const esc = (s: string) => s.replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[ch]!);
 
-function layout(body: string, unsubscribe?: string) {
-  return `<!doctype html><html><body style="margin:0;background:#f6f4ef;font-family:-apple-system,Segoe UI,Helvetica,Arial,sans-serif;color:#1d1b17">
+function layout(body: string, manage?: string) {
+  return `<!doctype html><html><body style="margin:0;background:#f6f4ef;font-family:-apple-system,Segoe UI,Helvetica,Arial,sans-serif;color:#1d1b17;line-height:1.5">
 <div style="max-width:560px;margin:0 auto;padding:32px 24px">
 <p style="margin:0 0 24px;font-size:20px;font-weight:700">Earthward AI</p>
 ${body}
 <p style="margin:32px 0 0;font-size:13px;color:#6b665c">Five AI agents decide every night where donated credits do the most good. Credits are virtual.${
-    unsubscribe ? ` <a href="${unsubscribe}" style="color:#6b665c">Unsubscribe</a>.` : ""
+    manage ? ` <a href="${manage}" style="color:#6b665c">Change how often you hear from us, or unsubscribe</a>.` : ""
   }</p>
 </div></body></html>`;
 }
@@ -112,18 +132,80 @@ ${body}
 const button = (href: string, label: string) =>
   `<p style="margin:24px 0"><a href="${href}" style="display:inline-block;padding:12px 20px;border-radius:999px;background:#8c7148;color:#fff;text-decoration:none;font-weight:600">${esc(label)}</a></p>`;
 
+const manageUrl = (sub: SubscriberRecord) => `${config.siteUrl}/digest?manage=${sub.token}`;
+const oneClickUrl = (sub: SubscriberRecord) => `${config.siteUrl}/api/notify/digest/unsubscribe?t=${sub.token}`;
+const listHeaders = (sub: SubscriberRecord) => ({ "List-Unsubscribe": `<${oneClickUrl(sub)}>`, "List-Unsubscribe-Post": "List-Unsubscribe=One-Click" });
+const frequencyOf = (sub: Pick<SubscriberRecord, "frequency">): EmailFrequency => sub.frequency ?? "weekly";
+
 async function sendConfirm(sub: SubscriberRecord) {
-  const link = `${config.siteUrl}/api/notify/digest/confirm?t=${sub.token}`;
-  await mailer().sendMail({
-    from: config.smtp.from,
+  // The link opens a page with a button, so mail scanners that follow links can't confirm on their own.
+  const link = `${config.siteUrl}/digest?confirm=${sub.token}`;
+  const what = frequencyOf(sub) === "daily" ? "an email after each night's council" : "the weekly roundup";
+  await send({
     to: sub.email,
-    subject: "Confirm your weekly Earthward AI digest",
-    text: `Confirm that you want the weekly digest from the Earthward AI council:\n\n${link}\n\nIf you didn't ask for this, ignore this email and nothing will be sent.`,
-    html: layout(`<p>Confirm that you want the weekly digest from the Earthward AI council: what the five agents decided, the closest calls, and who's top of the prediction game.</p>${button(link, "Confirm my subscription")}<p style="color:#6b665c">If you didn't ask for this, ignore this email and nothing will be sent.</p>`),
+    subject: frequencyOf(sub) === "daily" ? "Confirm your nightly Earthward AI email" : "Confirm your weekly Earthward AI roundup",
+    text: `Confirm that you want ${what} from the Earthward AI council:\n\n${link}\n\nIf you didn't ask for this, ignore this email and nothing will be sent.`,
+    html: layout(`<p>Confirm that you want ${what} from the Earthward AI council: what the five agents decided, the closest calls, and how your predictions did.</p>${button(link, "Confirm my subscription")}<p style="color:#6b665c">If you didn't ask for this, ignore this email and nothing will be sent.</p>`),
   });
 }
 
-/** The weekly digest, built from the last seven sessions. */
+/** One night's decision, personal when the subscriber predicted that night. */
+export function nightlyContent(session: Session, predicted: string | null) {
+  const u = config.siteUrl;
+  const utm = "utm_source=nightly&utm_medium=email";
+  const top = session.allocations.slice(0, 5);
+  const winners = winningCauses(session);
+  const name = (id: string) => causeById(id)?.name ?? id;
+  let verdict = "";
+  if (predicted) {
+    verdict = winners.includes(predicted)
+      ? `<p style="padding:12px 16px;border-radius:12px;background:#e6efe1;margin:0 0 16px"><strong>You called it.</strong> You picked ${esc(name(predicted))}, and it came out on top.</p>`
+      : `<p style="padding:12px 16px;border-radius:12px;background:#efe9df;margin:0 0 16px"><strong>Not this time.</strong> You picked ${esc(name(predicted))}; ${esc(name(winners[0] ?? ""))} came out on top.</p>`;
+  }
+  const rows = top
+    .map(
+      (a) => `<tr><td style="padding:6px 12px 6px 0">${esc(name(a.causeId))}</td><td style="padding:6px 0;width:45%"><div style="height:8px;border-radius:4px;background:#8c7148;width:${Math.max(4, Math.round(a.share * 100 * 3))}%"></div></td><td style="padding:6px 0 6px 12px;text-align:right;font-variant-numeric:tabular-nums">${Math.round(a.share * 100)}%</td></tr>`,
+    )
+    .join("");
+  const excerpt = session.minutes.replace(/\s+/g, " ").trim().split(/(?<=[.!?])\s/).slice(0, 2).join(" ");
+  const give = givingFor(winners[0] ?? "");
+  const giveBlock = give
+    ? `<p style="margin:24px 0 0;font-size:15px">Want to back ${esc(name(winners[0]!))} with real money? <a href="${give.url}" style="color:#8c7148">${esc(give.org)}</a> (${esc(give.credential)}) takes donations through Every.org, a nonprofit platform. We never touch the money.</p>`
+    : "";
+  const html = `<p style="margin:0 0 4px;color:#6b665c;font-size:14px">The council's decision for ${esc(session.day)}</p>
+<h1 style="font-size:24px;line-height:1.25;margin:0 0 16px">${esc(session.title)}</h1>
+${verdict}<p>The five agents split ${session.spent.toLocaleString("en-US")} credits. Where most of it went:</p>
+<table style="width:100%;border-collapse:collapse;font-size:15px">${rows}</table>
+${excerpt ? `<p style="margin:20px 0 0;color:#3d392f;font-style:italic">${esc(excerpt)}</p>` : ""}
+${button(`${u}/council/${session.day}?${utm}`, "Watch the debate")}
+<p style="margin:0">Think you know what they'll pick tonight? <a href="${u}/predict?${utm}" style="color:#8c7148">Make your prediction</a>.</p>
+${giveBlock}`;
+  const lines = top.map((a) => `- ${name(a.causeId)}: ${Math.round(a.share * 100)}%`).join("\n");
+  const youText = predicted ? (winners.includes(predicted) ? `You called it: ${name(predicted)} came out on top.\n\n` : `Not this time: you picked ${name(predicted)}.\n\n`) : "";
+  const text = `${session.title}\n\n${youText}The five agents split ${session.spent.toLocaleString("en-US")} credits:\n${lines}\n\nWatch the debate: ${u}/council/${session.day}\nPredict tonight: ${u}/predict`;
+  const subject = predicted ? (winners.includes(predicted) ? `You called it: ${session.title}` : `Not this time: ${session.title}`) : session.title;
+  return { subject, html, text };
+}
+
+/** After each night: the decision to everyone who asked for daily email. */
+export async function sendNightlyEmails(store: Store, session: Session): Promise<number> {
+  if (!emailEnabled()) return 0;
+  const subs = (await store.listActiveSubscribers(5000)).filter((s) => frequencyOf(s) === "daily");
+  let sent = 0;
+  for (const sub of subs) {
+    const pred = sub.vidHash ? await store.getPrediction(session.day, sub.vidHash).catch(() => null) : null;
+    const content = nightlyContent(session, pred?.causeId ?? null);
+    try {
+      if (!(await send({ to: sub.email, subject: content.subject, text: `${content.text}\n\nManage or unsubscribe: ${manageUrl(sub)}`, html: layout(content.html, manageUrl(sub)), headers: listHeaders(sub) }))) break;
+      sent += 1;
+    } catch (err) {
+      console.error("nightly email failed", err);
+    }
+  }
+  return sent;
+}
+
+/** The weekly roundup, built from the last seven sessions. */
 export async function digestContent(store: Store) {
   const [sessions, leaders] = await Promise.all([store.listSessions(7), store.topPredictors(3)]);
   const totals = new Map<string, number>();
@@ -146,27 +228,38 @@ ${button(`${u}/predict?${utm}`, "Predict tonight's top cause")}
 }
 
 export async function sendDigest(store: Store): Promise<number> {
-  if (!digestEnabled()) return 0;
+  if (!emailEnabled()) return 0;
   const content = await digestContent(store);
-  const subs = await store.listActiveSubscribers(2000);
+  const subs = (await store.listActiveSubscribers(5000)).filter((s) => frequencyOf(s) === "weekly");
   let sent = 0;
   for (const sub of subs) {
-    const unsub = `${config.siteUrl}/api/notify/digest/unsubscribe?t=${sub.token}`;
     try {
-      await mailer().sendMail({
-        from: config.smtp.from,
-        to: sub.email,
-        subject: content.subject,
-        text: `${content.text}\n\nUnsubscribe: ${unsub}`,
-        html: layout(content.html, unsub),
-        headers: { "List-Unsubscribe": `<${unsub}>`, "List-Unsubscribe-Post": "List-Unsubscribe=One-Click" },
-      });
+      if (!(await send({ to: sub.email, subject: content.subject, text: `${content.text}\n\nManage or unsubscribe: ${manageUrl(sub)}`, html: layout(content.html, manageUrl(sub)), headers: listHeaders(sub) }))) break;
       sent += 1;
     } catch (err) {
       console.error("digest send failed", err);
     }
   }
   return sent;
+}
+
+// --- Forwarding visitors' messages to the team -------------------------------
+
+const inboxCap = new DailyCap(120);
+
+/**
+ * Forwards a visitor's message or question to the team's inbox. Replying in the mail client goes
+ * straight to the visitor when they left an address. Never throws and never waits more than a few
+ * seconds, because it runs inside the visitor's request.
+ */
+export async function notifyInbox(m: { subject: string; text: string; replyTo?: string | null }): Promise<boolean> {
+  if (!emailEnabled() || !config.smtp.inbox || !inboxCap.take()) return false;
+  const subject = `[Earthward] ${m.subject.replace(/[\r\n]+/g, " ").slice(0, 120)}`;
+  const job = send({ to: config.smtp.inbox, subject, text: m.text, replyTo: m.replyTo ?? undefined }).catch((err) => {
+    console.error("inbox notice failed", err);
+    return false;
+  });
+  return Promise.race([job, new Promise<boolean>((r) => setTimeout(() => r(false), 6000))]);
 }
 
 // --- Routes ------------------------------------------------------------------
@@ -177,14 +270,25 @@ const PushSchema = z.object({
     keys: z.object({ p256dh: z.string().min(20).max(200), auth: z.string().min(8).max(100) }),
   }),
 });
-const EmailSchema = z.object({ email: z.string().trim().toLowerCase().email().max(160), website: z.string().max(200).optional() });
+const EmailSchema = z.object({
+  email: z.string().trim().toLowerCase().email().max(160),
+  frequency: z.enum(["daily", "weekly"]).default("weekly"),
+  website: z.string().max(200).optional(),
+});
+const TokenSchema = z.object({ t: z.string().regex(/^[A-Za-z0-9_-]{16,40}$/) });
+const FrequencySchema = TokenSchema.extend({ frequency: z.enum(["daily", "weekly"]) });
+
+const maskEmail = (email: string) => {
+  const [user, domain] = email.split("@");
+  return `${user.slice(0, 1)}${"•".repeat(Math.max(2, Math.min(6, user.length - 1)))}@${domain}`;
+};
 
 export function notifyApi(store: Store) {
   const api = new Hono();
 
   api.get("/config", (c) => {
     c.header("Cache-Control", "public, max-age=300");
-    return c.json({ push: pushEnabled() ? config.vapidPublicKey : null, digest: digestEnabled() });
+    return c.json({ push: pushEnabled() ? config.vapidPublicKey : null, digest: emailEnabled() });
   });
 
   api.post("/push", async (c) => {
@@ -207,12 +311,13 @@ export function notifyApi(store: Store) {
   });
 
   api.post("/digest", async (c) => {
-    if (!digestEnabled()) return c.json({ error: "The weekly digest isn't switched on yet." }, 503);
+    if (!emailEnabled()) return c.json({ error: "Email updates aren't switched on yet." }, 503);
     if (!limiters.notify.take(hashIp(clientIp(c)))) return c.json({ error: "Too many requests. Try again later." }, 429);
     const parsed = EmailSchema.safeParse(await c.req.json().catch(() => null));
     if (!parsed.success) return c.json({ error: "Enter a valid email address." }, 400);
     if (parsed.data.website) return c.json({ ok: true }, 201); // bots fill the hidden field
     if (!dailyCaps.notify.take()) return c.json({ error: "Too many sign-ups today. Try again tomorrow." }, 503);
+    const vid = cleanText(c.req.header("x-ew-vid"), 64);
     const sub = await store.upsertSubscriber({
       id: sha(parsed.data.email),
       email: parsed.data.email,
@@ -220,6 +325,8 @@ export function notifyApi(store: Store) {
       token: randomBytes(18).toString("base64url"),
       createdAt: new Date().toISOString(),
       confirmedAt: null,
+      frequency: parsed.data.frequency,
+      vidHash: vid && vid.length >= 8 ? hashId(vid) : null,
     });
     if (sub.status === "pending") {
       try {
@@ -233,28 +340,44 @@ export function notifyApi(store: Store) {
     return c.json({ ok: true }, 201);
   });
 
-  const token = (t: string | undefined) => (t && /^[A-Za-z0-9_-]{16,40}$/.test(t) ? t : null);
-
-  api.get("/digest/confirm", async (c) => {
-    const t = token(c.req.query("t"));
-    const sub = t ? await store.findSubscriber(t) : null;
-    if (sub) await store.activateSubscriber(sub.id);
-    return c.redirect(sub ? "/digest?confirmed=1" : "/digest?invalid=1", 302);
-  });
-
-  const unsubscribe = async (t: string | undefined) => {
-    const v = token(t);
-    const sub = v ? await store.findSubscriber(v) : null;
-    if (sub) await store.deleteSubscriber(sub.id);
-    return Boolean(sub);
+  const byToken = async (t: string | undefined) => {
+    const parsed = TokenSchema.safeParse({ t });
+    return parsed.success ? store.findSubscriber(parsed.data.t) : null;
   };
-  api.get("/digest/unsubscribe", async (c) => {
-    await unsubscribe(c.req.query("t"));
-    return c.redirect("/digest?unsubscribed=1", 302);
+
+  // Links in emails open pages; the pages post here. Mail scanners follow links but don't press buttons.
+  api.get("/digest/confirm", (c) => c.redirect(`/digest?confirm=${encodeURIComponent(c.req.query("t") ?? "")}`, 302));
+  api.get("/digest/unsubscribe", (c) => c.redirect(`/digest?manage=${encodeURIComponent(c.req.query("t") ?? "")}&leave=1`, 302));
+
+  api.post("/digest/confirm", async (c) => {
+    const body = (await c.req.json().catch(() => ({}))) as { t?: string };
+    const sub = await byToken(body.t);
+    if (!sub) return c.json({ error: "That link has expired or was already used." }, 404);
+    if (sub.status !== "active") await store.activateSubscriber(sub.id);
+    return c.json({ ok: true, frequency: frequencyOf(sub) });
   });
-  // One-click unsubscribe from the mail client (RFC 8058).
+
+  api.get("/subscription", async (c) => {
+    const sub = await byToken(c.req.query("t"));
+    if (!sub) return c.json({ error: "That link has expired or the address was already removed." }, 404);
+    c.header("Cache-Control", "no-store");
+    return c.json({ email: maskEmail(sub.email), frequency: frequencyOf(sub), status: sub.status });
+  });
+
+  api.post("/subscription", async (c) => {
+    const parsed = FrequencySchema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) return c.json({ error: "Pick daily or weekly." }, 400);
+    const sub = await store.findSubscriber(parsed.data.t);
+    if (!sub) return c.json({ error: "That link has expired or the address was already removed." }, 404);
+    await store.setSubscriberFrequency(sub.id, parsed.data.frequency);
+    return c.json({ ok: true, frequency: parsed.data.frequency });
+  });
+
+  // One-click unsubscribe from the mail client (RFC 8058), and the button on the manage page.
   api.post("/digest/unsubscribe", async (c) => {
-    await unsubscribe(c.req.query("t"));
+    const body = (await c.req.json().catch(() => ({}))) as { t?: string };
+    const sub = await byToken(c.req.query("t") ?? body.t);
+    if (sub) await store.deleteSubscriber(sub.id);
     return c.json({ ok: true });
   });
 

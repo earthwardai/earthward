@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Link } from "wouter";
 import { agentById, type AgentId } from "../../../shared/agents";
 import { causeById } from "../../../shared/causes";
@@ -99,9 +99,72 @@ export function AskPage() {
           <div style={{ marginTop: 28 }}>
             <Share path="/ask" campaign="ask" label="Share this verdict" text={clip(`I asked the Earthward AI council: "${answer.question}" Their verdict: ${answer.verdict}`, 240)} />
           </div>
+          <AskFollowUp question={answer.question} />
         </section>
       ) : null}
     </main>
+  );
+}
+
+/** After an answer: hand the question to a person on the team, who replies by email. */
+function AskFollowUp({ question }: { question: string }) {
+  const shownAt = useRef(Date.now());
+  const [open, setOpen] = useState(false);
+  const [email, setEmail] = useState("");
+  const [note, setNote] = useState("");
+  const [state, setState] = useState<{ s: "idle" | "busy" | "sent" | "error"; text?: string }>({ s: "idle" });
+
+  async function send(e: FormEvent) {
+    e.preventDefault();
+    setState({ s: "busy" });
+    try {
+      await api("/api/contact", {
+        method: "POST",
+        body: JSON.stringify({
+          kind: "question",
+          page: "/ask",
+          email: email.trim(),
+          message: `Follow-up on a question to the council: "${question}"${note.trim() ? `\n\n${note.trim()}` : ""}`,
+          elapsed: Date.now() - shownAt.current,
+        }),
+      });
+      setState({ s: "sent" });
+    } catch (err) {
+      setState({ s: "error", text: err instanceof ApiError ? err.message : "That didn't send. Try again." });
+    }
+  }
+
+  if (state.s === "sent")
+    return (
+      <p className="form-ok ask-followup" role="status">
+        Sent. A person from the Earthward team will reply to {email.trim()}.
+      </p>
+    );
+  if (!open)
+    return (
+      <p className="ask-followup muted">
+        Want a person to weigh in?{" "}
+        <button type="button" className="linkish" onClick={() => setOpen(true)} data-track="ask-followup-open">
+          Ask the team by email
+        </button>
+      </p>
+    );
+  return (
+    <form className="ask-followup contact-form compact" onSubmit={send}>
+      <p className="muted">We'll send your question to the Earthward team and reply by email, usually within two days.</p>
+      <label className="field-label" htmlFor="fu-email">
+        Your email
+      </label>
+      <input id="fu-email" className="text-input" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" />
+      <label className="field-label" htmlFor="fu-note">
+        Anything to add? (optional)
+      </label>
+      <textarea id="fu-note" className="text-input" maxLength={1500} value={note} onChange={(e) => setNote(e.target.value)} />
+      <button type="submit" className="btn small" disabled={state.s === "busy" || !email.includes("@")} data-track="ask-followup-send">
+        Send to the team
+      </button>
+      {state.s === "error" ? <p className="form-error">{state.text}</p> : null}
+    </form>
   );
 }
 

@@ -18,6 +18,7 @@ import {
   type ApiKeyRecord,
   type GroupRecord,
   type PushSubRecord,
+  type EmailFrequency,
   type SubscriberRecord,
   type PledgeResult,
   GROUP_PLEDGE_LIMIT,
@@ -562,6 +563,10 @@ export class FirestoreStore implements Store {
 
   async activateSubscriber(id: string) {
     await this.db.collection("subscribers").doc(id).update({ status: "active", confirmedAt: new Date().toISOString() });
+  }
+
+  async setSubscriberFrequency(id: string, frequency: EmailFrequency) {
+    await this.db.collection("subscribers").doc(id).update({ frequency });
   }
 
   async deleteSubscriber(id: string) {

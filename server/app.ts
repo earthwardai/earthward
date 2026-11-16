@@ -19,7 +19,8 @@ import { runArena } from "./arena";
 import { announceSession } from "./autopost";
 import { publicApi } from "./publicApi";
 import { groupsApi } from "./groups";
-import { notifyApi, pushNightly, sendDigest } from "./notify";
+import { FEEDBACK_KINDS } from "../shared/content";
+import { emailEnabled, notifyApi, notifyInbox, pushEnabled, pushNightly, sendDigest, sendNightlyEmails } from "./notify";
 import { badgeSvg, embedHtml } from "./embed";
 import { councilImage, impactImage } from "./og";
 import { runNominationRound } from "./nominations";
@@ -66,6 +67,8 @@ const DonationSchema = z.object({
   website: z.string().max(200).optional(),
   elapsed: z.number().int().min(0).max(86_400_000),
 });
+
+const KIND_LABEL: Record<string, string> = Object.fromEntries(FEEDBACK_KINDS.map((k) => [k.id, k.label]));
 
 const ContactSchema = z.object({
   kind: z.enum(["suggestion", "question", "feedback", "bug", "partnership"]).optional(),
@@ -183,6 +186,31 @@ export function createApp(store: Store) {
   app.route("/api/notify", notifyApi(store));
 
   app.get("/api/health", (c) => c.json({ status: "ok", version: config.version, startedAt }));
+
+  // Public status: is the site up, did the council meet on schedule, and what's switched on.
+  let statusCache: { at: number; body: unknown } | null = null;
+  app.get("/api/status", async (c) => {
+    if (!statusCache || Date.now() - statusCache.at > 60_000) {
+      const now = new Date();
+      const [[last], head] = await Promise.all([store.listSessions(1), store.getHead()]);
+      const lastAt = last ? Date.parse(last.at) : 0;
+      // The council meets once a day; more than 26 hours without a session means a night was missed.
+      const councilOk = lastAt > 0 && now.getTime() - lastAt < 26 * 3600_000;
+      statusCache = {
+        at: Date.now(),
+        body: {
+          status: councilOk ? "ok" : "degraded",
+          checkedAt: now.toISOString(),
+          version: config.version,
+          council: { ok: councilOk, lastDay: last?.day ?? null, lastAt: last?.at ?? null, lastModel: last?.model ?? null, nextAt: nextSessionAt(now, config.timeZone).toISOString() },
+          ledger: { ok: Boolean(head), entries: head ? head.seq + 1 : 0 },
+          services: { website: true, api: true, email: emailEnabled(), notifications: pushEnabled(), bluesky: Boolean(process.env.BLUESKY_HANDLE && process.env.BLUESKY_APP_PASSWORD) },
+        },
+      };
+    }
+    c.header("Cache-Control", "public, max-age=60");
+    return c.json(statusCache.body);
+  });
 
   app.get("/api/state", async (c) => {
     if (!stateCache || Date.now() - stateCache.at > STATE_TTL_MS) {
@@ -344,17 +372,15 @@ export function createApp(store: Store) {
     const message = cleanText(body.message, 4000);
     if (!message || message.length < 10) return c.json({ error: "Write at least a sentence so we can reply." }, 400);
     if (!dailyCaps.contact.take()) return c.json({ error: "We've had a lot of messages today. Please write again tomorrow, or email ved@earthwardai.com." }, 503);
-    await store.addMessage({
-      at: new Date().toISOString(),
-      kind: body.kind ?? "feedback",
-      page: cleanText(body.page, 200),
-      name: cleanText(body.name, 80),
-      email,
-      message,
-      ip,
-      ipHash,
-      country: countryOf(ip),
-      ua: (c.req.header("user-agent") ?? "").slice(0, 300),
+    const kind = body.kind ?? "feedback";
+    const name = cleanText(body.name, 80);
+    const page = cleanText(body.page, 200);
+    const country = countryOf(ip);
+    await store.addMessage({ at: new Date().toISOString(), kind, page, name, email, message, ip, ipHash, country, ua: (c.req.header("user-agent") ?? "").slice(0, 300) });
+    await notifyInbox({
+      subject: `${KIND_LABEL[kind] ?? "Message"} from ${name ?? email ?? "a visitor"}: ${message.slice(0, 60)}`,
+      text: `${message}\n\n---\nType: ${KIND_LABEL[kind] ?? kind}\nFrom: ${name ?? "Anonymous"}${email ? ` <${email}>` : " (no email left, so you can't reply)"}\nPage: ${page ?? "unknown"}\nCountry: ${country ?? "unknown"}\n\nAll messages: ${config.siteUrl}/admin`,
+      replyTo: email,
     });
     return c.json({ sent: true }, 201);
   });
@@ -377,6 +403,17 @@ export function createApp(store: Store) {
     try {
       const answer = await askCouncil(question);
       store.bumpStats(dayKey(new Date(), config.timeZone), { asks: 1 }).catch(() => undefined);
+      // Every question lands in the team's inbox and the admin list, so a person can follow up.
+      const country = countryOf(ip);
+      await Promise.all([
+        store
+          .addMessage({ at: new Date().toISOString(), kind: "ask", page: "/ask", name: null, email: null, message: question, answer: answer.verdict, ip, ipHash: hashIp(ip), country, ua: (c.req.header("user-agent") ?? "").slice(0, 300) })
+          .catch((err) => console.error("saving question failed", err)),
+        notifyInbox({
+          subject: `Question for the council: ${question.slice(0, 70)}`,
+          text: `${question}\n\nThe council's verdict:\n${answer.verdict}\n\n${answer.views.map((v) => `${v.agentId} (${v.stance}): ${v.say}`).join("\n")}\n\n---\nCountry: ${country ?? "unknown"}. Answered automatically; the visitor left no email. If they ask for a follow-up, it arrives as a separate message.`,
+        }),
+      ]);
       return c.json(answer);
     } catch (err) {
       if (err instanceof AskUnavailableError) return c.json({ error: "The council isn't taking questions right now." }, 503);
@@ -638,6 +675,10 @@ export function createApp(store: Store) {
       ["/nominate", today],
       ["/developers", today],
       ["/councils", today],
+      ["/classroom", today],
+      ["/match", today],
+      ["/changelog", today],
+      ["/press", today],
       ["/es", today],
       ["/hi", today],
       ["/how-it-works", today],
@@ -770,6 +811,7 @@ export function createApp(store: Store) {
     if (result.status === "created") console.log("autopost", JSON.stringify(await announceSession(result.session)));
     if (result.status === "created") await runArena(store, result.session).catch((err) => console.error("arena failed", err));
     if (result.status === "created") console.log("push sent", await pushNightly(store, result.session).catch((err) => (console.error("push failed", err), 0)));
+    if (result.status === "created") console.log("nightly emails sent", await sendNightlyEmails(store, result.session).catch((err) => (console.error("nightly email failed", err), 0)));
     // The first session of each month also settles the nomination round.
     const today = dayKey(new Date(), config.timeZone);
     if (today.endsWith("-01")) await runNominationRound(store, today.slice(0, 7)).catch((err) => console.error("nomination round failed", err));

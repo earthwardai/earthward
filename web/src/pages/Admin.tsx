@@ -37,7 +37,7 @@ interface Overview {
   visits: Visit[];
   donations: { at: string; amount: number; name: string | null; agentId: string | null; country: string | null; ipHash: string; vid: string | null; seq: number }[];
   security: { at: string; kind: string; ip: string; path: string; detail?: string }[];
-  messages: { at: string; kind?: string; page?: string | null; name: string | null; email: string | null; message: string; ip: string; country: string | null }[];
+  messages: { at: string; kind?: string; page?: string | null; name: string | null; email: string | null; message: string; answer?: string | null; ip: string; country: string | null }[];
   treasury: Treasury;
   sessions: Session[];
   github: { repo: string; stars: number | null; forks: number | null; issues: number | null } | null;
@@ -125,6 +125,10 @@ function DailyVisitors({ stats }: { stats: DayStats[] }) {
     </div>
   );
 }
+
+/** A reply that quotes the visitor's message, sent from the admin's own mail client. */
+const replyLink = (m: { email: string | null; message: string; at: string }) =>
+  `mailto:${m.email}?subject=${encodeURIComponent("Re: your message to Earthward AI")}&body=${encodeURIComponent(`\n\n---\nOn ${new Date(m.at).toUTCString()} you wrote:\n${m.message.slice(0, 1500)}`)}`;
 
 export function AdminPage() {
   const [who, setWho] = useState<{ ip: string; signedIn: boolean } | null>(null);
@@ -384,7 +388,7 @@ export function AdminPage() {
                   <tr key={`${m.at}-${i}`}>
                     <td className="num">{time(m.at)}</td>
                     <td>
-                      {m.kind ?? "feedback"}
+                      {m.kind === "ask" ? "asked the council" : (m.kind ?? "feedback")}
                       {m.page ? <div className="muted">{m.page}</div> : null}
                     </td>
                     <td>
@@ -392,11 +396,14 @@ export function AdminPage() {
                       {m.email ? (
                         <>
                           <br />
-                          <a href={`mailto:${m.email}`}>{m.email}</a>
+                          <a href={replyLink(m)}>Reply to {m.email}</a>
                         </>
                       ) : null}
                     </td>
-                    <td className="wrap">{m.message}</td>
+                    <td className="wrap">
+                      {m.message}
+                      {m.answer ? <div className="muted">Council: {m.answer}</div> : null}
+                    </td>
                     <td className="num">{m.ip}</td>
                     <td>{countryName(m.country) ?? "Unknown"}</td>
                   </tr>
