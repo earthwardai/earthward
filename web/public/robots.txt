@@ -1,0 +1,30 @@
+# Earthward welcomes search engines and AI answer engines.
+User-agent: *
+Allow: /
+Disallow: /admin
+# The public API stays crawlable so Google can render pages with their live data.
+Disallow: /api/admin/
+Disallow: /api/t
+Disallow: /internal/
+
+# Named explicitly so there's no doubt they may read and cite the site.
+User-agent: GPTBot
+Allow: /
+Disallow: /admin
+
+User-agent: OAI-SearchBot
+Allow: /
+Disallow: /admin
+
+User-agent: ClaudeBot
+Allow: /
+Disallow: /admin
+
+User-agent: PerplexityBot
+Allow: /
+Disallow: /admin
+
+User-agent: Google-Extended
+Allow: /
+
+Sitemap: https://earthwardai.com/sitemap.xml

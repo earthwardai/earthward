@@ -1,0 +1,11 @@
+node_modules
+dist
+data/*.mmdb
+.env*
+*.log
+
+# Deployment config for the live site (project ids, admin IPs). See deploy/run-env.example.yaml.
+deploy/run-env.yaml
+# Internal planning notes.
+docs/ideas.md
+docs/launch-kit.md

@@ -1,0 +1,18 @@
+# Copy to deploy/run-env.yaml and fill in your own values. deploy/run-env.yaml is gitignored.
+GOOGLE_CLOUD_PROJECT: "your-gcp-project-id"
+STORE: "firestore"
+# Time zone that defines "a day" for the nightly council.
+COUNCIL_TZ: "Asia/Kolkata"
+COUNCIL_MODEL: "gemini-3.5-flash"
+VERTEX_LOCATION: "global"
+# Comma-separated IPs allowed to reach /admin (for example your VPN exit IPs).
+ADMIN_IPS: "203.0.113.10"
+# Number of proxies in front of the app that append to X-Forwarded-For (1 on Cloud Run).
+TRUSTED_PROXY_HOPS: "1"
+APP_VERSION: "dev"
+# Service account Cloud Scheduler uses to call /internal/council, and the audience it signs for.
+SCHEDULER_SA: "earthward-scheduler@your-gcp-project-id.iam.gserviceaccount.com"
+SCHEDULER_AUDIENCE: "https://your-service-xxxxxxxxxx.us-central1.run.app"
+# Optional: a tip link shown on the site, and an IndexNow key (32 hex characters).
+SUPPORT_URL: ""
+INDEXNOW_KEY: ""

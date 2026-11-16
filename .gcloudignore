@@ -1,0 +1,6 @@
+# Explicit so gcloud does not fall back to .gitignore (which excludes the GeoIP database).
+.gcloudignore
+node_modules/
+dist/
+.env*
+*.log

@@ -1,0 +1,61 @@
+const env = process.env;
+
+const list = (v: string | undefined) =>
+  (v ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+export const config = {
+  port: Number(env.PORT ?? 8080),
+  production: env.NODE_ENV === "production",
+  version: env.APP_VERSION ?? "dev",
+  project: env.GOOGLE_CLOUD_PROJECT ?? "",
+  store: (env.STORE ?? (env.GOOGLE_CLOUD_PROJECT ? "firestore" : "memory")) as "memory" | "firestore",
+  staticDir: env.STATIC_DIR ?? "dist/web",
+  geoipDb: env.GEOIP_DB ?? "data/dbip-country-lite.mmdb",
+
+  timeZone: env.COUNCIL_TZ ?? "Asia/Kolkata",
+  model: env.COUNCIL_MODEL ?? "gemini-3.5-flash",
+  vertexLocation: env.VERTEX_LOCATION ?? "global",
+  /** Set to "off" to always use the deterministic fallback. */
+  llm: env.COUNCIL_LLM ?? "vertex",
+  genesisCredits: Number(env.GENESIS_CREDITS ?? 10000),
+  /** Public site address, used for the sitemap and share links. */
+  siteUrl: (env.SITE_URL ?? "https://earthwardai.com").replace(/\/$/, ""),
+  /** Optional "buy us a coffee" link. The support section stays hidden until it is set. */
+  /** Public IndexNow key (served at /<key>.txt). Lets new pages reach Bing and others immediately. */
+  indexNowKey: /^[a-f0-9]{32}$/.test(env.INDEXNOW_KEY ?? "") ? (env.INDEXNOW_KEY as string) : "",
+  /** Official profiles (X, LinkedIn, GitHub...), comma separated; added to structured data as sameAs. */
+  sameAs: list(env.SAME_AS).filter((u) => /^https:\/\//.test(u)),
+  supportUrl: env.SUPPORT_URL && /^https:\/\//.test(env.SUPPORT_URL) ? env.SUPPORT_URL : null,
+
+  /** Public IPs allowed to reach the admin area (the VPN exit addresses). */
+  adminIps: list(env.ADMIN_IPS),
+  adminKey: env.ADMIN_KEY ?? "",
+  /** Root secret for cookie signing and IP hashing. */
+  appSecret: env.APP_SECRET ?? (env.NODE_ENV === "production" ? "" : "dev-only-secret"),
+
+  /** How many proxies in front of us append to X-Forwarded-For. */
+  proxyHops: Number(env.TRUSTED_PROXY_HOPS ?? 1),
+
+  schedulerEmail: env.SCHEDULER_SA ?? "",
+  schedulerAudience: env.SCHEDULER_AUDIENCE ?? "",
+
+  limits: {
+    minDonation: 1,
+    maxDonation: 1000,
+    donationsPerIpPerDay: 25,
+    analyticsRetentionDays: 30,
+  },
+};
+
+export function assertProductionConfig() {
+  if (!config.production) return;
+  const missing = [
+    !config.appSecret && "APP_SECRET",
+    !config.adminKey && "ADMIN_KEY",
+    config.adminIps.length === 0 && "ADMIN_IPS",
+  ].filter(Boolean);
+  if (missing.length) throw new Error(`Missing required configuration: ${missing.join(", ")}`);
+}
