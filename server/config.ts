@@ -64,6 +64,8 @@ export const config = {
 
   /** How many proxies in front of us append to X-Forwarded-For. */
   proxyHops: Number(env.TRUSTED_PROXY_HOPS ?? 1),
+  /** Shared with the Cloudflare transform rule that marks requests coming through Cloudflare. */
+  edgeSecret: env.EDGE_SECRET ?? "",
 
   schedulerEmail: env.SCHEDULER_SA ?? "",
   schedulerAudience: env.SCHEDULER_AUDIENCE ?? "",

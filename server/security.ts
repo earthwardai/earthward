@@ -1,3 +1,4 @@
+import { isIP } from "node:net";
 import { createHmac, timingSafeEqual } from "node:crypto";
 import type { Context, MiddlewareHandler } from "hono";
 import { config } from "./config";
@@ -10,6 +11,15 @@ import { config } from "./config";
  * can be forged by the client and is ignored.
  */
 export function clientIp(c: Context): string {
+  // Behind Cloudflare, Google's front end sees a Cloudflare address. Cloudflare adds a secret header
+  // (a transform rule set up with the zone) and the visitor's address in CF-Connecting-IP. The
+  // address is trusted only when the secret matches, so requests that go around Cloudflare
+  // straight to Google can't claim to be anyone else.
+  if (config.edgeSecret) {
+    const edge = c.req.header("x-ew-edge");
+    const cip = c.req.header("cf-connecting-ip")?.trim();
+    if (edge && cip && safeEqual(edge, config.edgeSecret) && isIP(cip)) return cip;
+  }
   const xff = c.req.header("x-forwarded-for");
   if (xff) {
     const parts = xff.split(",").map((s) => s.trim()).filter(Boolean);

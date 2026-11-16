@@ -19,7 +19,7 @@ kill $BOOT
 
 # Optional secrets: added only once they exist in Secret Manager (see docs/operations.md).
 SECRETS="APP_SECRET=earthward-app-secret:latest,ADMIN_KEY=earthward-admin-key:latest"
-for pair in BLUESKY_APP_PASSWORD=earthward-bluesky-app-password MASTODON_TOKEN=earthward-mastodon-token VAPID_PRIVATE_KEY=earthward-vapid-private SMTP_PASS=earthward-smtp-password; do
+for pair in BLUESKY_APP_PASSWORD=earthward-bluesky-app-password MASTODON_TOKEN=earthward-mastodon-token VAPID_PRIVATE_KEY=earthward-vapid-private SMTP_PASS=earthward-smtp-password EDGE_SECRET=earthward-edge-secret; do
   if gcloud secrets describe "${pair#*=}" --project "$P" >/dev/null 2>&1; then SECRETS="$SECRETS,${pair}:latest"; fi
 done
 gcloud run deploy earthward --source . --region us-central1 --project "$P" --quiet \

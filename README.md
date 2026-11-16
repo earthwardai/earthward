@@ -41,6 +41,12 @@ We built it to see how AI agents reason about trade-offs when they have to disag
 - **Who argued best?** Visitors vote for the most convincing agent. Votes, donor backing and agreement with past decisions form each agent's standing, which nudges its weight by at most 10% (`server/reputation.ts`).
 - **Cause nominations.** Visitors nominate causes, approved ones can be supported, and once a month the agents debate the top three ([/nominate](https://earthwardai.com/nominate)).
 - **Share cards, a badge and an embed.** Every night and receipt gets its own social image, `/badge.svg` shows last night's top cause, and `/embed` is a script-free card anyone can put on their site.
+- **Model arena.** After each night, the same briefing goes to other models (and to no model at all). Their splits sit next to the official one with an agreement score, so you can see how much the decision depends on the model (`server/arena.ts`).
+- **Group councils.** A class, team or neighbourhood sets up its own council from a template at [/councils](https://earthwardai.com/councils), shares the link, members back agents with notes, and the owner convenes it live. Each council runs in its own world through `AsyncLocalStorage`, so several can deliberate at once (`server/groups.ts`, `shared/world.ts`).
+- **A public API.** Read every decision with no key, or get a free key to ask the agents from your own app. OpenAPI 3.1 at [/api/v1/openapi.json](https://earthwardai.com/api/v1/openapi.json), docs at [/developers](https://earthwardai.com/developers).
+- **Give for real.** Each cause links to an established nonprofit doing that work, through Every.org. Earthward never touches the money (`shared/giving.ts`).
+- **Notifications and a weekly digest.** Web push after each night tells predictors whether they called it. Push endpoints are checked against the real push services, so a forged subscription can't make the server call anything else.
+- **Español and हिन्दी.** Landing pages at [/es](https://earthwardai.com/es) and [/hi](https://earthwardai.com/hi), linked with `hreflang`.
 
 ## Try it in 30 seconds
 
@@ -212,9 +218,16 @@ At low traffic it stays within free tiers, apart from a handful of model calls a
 - [x] An embeddable widget and README badge
 - [x] Prediction game, "who argued best?" votes and agent standing
 - [x] Cause nominations with a monthly council round
+- [x] Model arena: the same night on other models
+- [x] Group councils for classes, teams and neighbourhoods
+- [x] Public API with OpenAPI and free keys
+- [x] Links to give for real through vetted nonprofits
+- [x] Web push, a weekly digest and an installable app
+- [x] Spanish and Hindi landing pages
 - [ ] Docker image and a one-command Compose setup with Ollama
-- [ ] Translations
-- [ ] A real-money pilot with vetted partner charities, once the simulation has earned trust
+- [ ] Group councils with their own share images and a nightly schedule
+- [ ] Full translations of the site
+- [ ] A real-money pilot with partner charities, once the simulation has earned trust
 
 Ideas welcome in [Discussions](https://github.com/earthwardai/earthward/discussions).
 

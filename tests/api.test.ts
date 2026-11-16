@@ -460,3 +460,22 @@ describe("notifications", () => {
     expect(pushMessage(session, null).title).toBe("Water leads");
   });
 });
+
+describe("client address behind Cloudflare", () => {
+  it("trusts CF-Connecting-IP only with the edge secret", async () => {
+    const { config } = await import("../server/config");
+    const { clientIp } = await import("../server/security");
+    const ctx = (h: Record<string, string>) => ({ req: { header: (k: string) => h[k.toLowerCase()] }, env: {} }) as unknown as import("hono").Context;
+    const saved = config.edgeSecret;
+    (config as { edgeSecret: string }).edgeSecret = "s3cret-edge-value";
+    try {
+      expect(clientIp(ctx({ "x-ew-edge": "s3cret-edge-value", "cf-connecting-ip": "203.0.113.7", "x-forwarded-for": "203.0.113.7, 172.70.1.1" }))).toBe("203.0.113.7");
+      // Around Cloudflare: forged headers are ignored and Google's appended address wins.
+      expect(clientIp(ctx({ "x-ew-edge": "guess", "cf-connecting-ip": "10.0.0.1", "x-forwarded-for": "10.0.0.1, 198.51.100.9" }))).toBe("198.51.100.9");
+      expect(clientIp(ctx({ "cf-connecting-ip": "10.0.0.1", "x-forwarded-for": "198.51.100.9" }))).toBe("198.51.100.9");
+      expect(clientIp(ctx({ "x-ew-edge": "s3cret-edge-value", "cf-connecting-ip": "not-an-ip", "x-forwarded-for": "198.51.100.9" }))).toBe("198.51.100.9");
+    } finally {
+      (config as { edgeSecret: string }).edgeSecret = saved;
+    }
+  });
+});
