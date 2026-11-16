@@ -10,6 +10,8 @@ import {
   type DayStats,
   type DonationRecord,
   type NewDonation,
+  type PredictionRecord,
+  type PredictorRecord,
   type SecurityEvent,
   type StatsIncrement,
   type Store,
@@ -323,5 +325,55 @@ export class FirestoreStore implements Store {
       const { expireAt: _e, ...rest } = d.data();
       return rest as SecurityEvent;
     });
+  }
+
+  async predict(p: PredictionRecord) {
+    const ref = this.db.collection("predictions").doc(`${p.day}_${p.vidHash}`);
+    const crowd = this.db.collection("predictCrowd").doc(p.day);
+    return this.db.runTransaction(async (tx) => {
+      if ((await tx.get(ref)).exists) return "exists" as const;
+      tx.set(ref, { ...p, expireAt: Timestamp.fromMillis(Date.now() + 120 * DAY_MS) });
+      tx.set(crowd, { day: p.day, total: FieldValue.increment(1), counts: { [safeKey(p.causeId)]: FieldValue.increment(1) } }, { merge: true });
+      return "created" as const;
+    });
+  }
+
+  async getPrediction(day: string, vidHash: string) {
+    const snap = await this.db.collection("predictions").doc(`${day}_${vidHash}`).get();
+    return snap.exists ? (snap.data() as PredictionRecord) : null;
+  }
+
+  async predictionCrowd(day: string) {
+    const d = (await this.db.collection("predictCrowd").doc(day).get()).data() as { total?: number; counts?: Record<string, number> } | undefined;
+    return { total: d?.total ?? 0, counts: d?.counts ?? {} };
+  }
+
+  async listPredictions(day: string, limit: number) {
+    const snap = await this.db.collection("predictions").where("day", "==", day).limit(limit).get();
+    return snap.docs.map((d) => d.data() as PredictionRecord);
+  }
+
+  async getPredictor(vidHash: string) {
+    const snap = await this.db.collection("predictors").doc(vidHash).get();
+    return snap.exists ? (snap.data() as PredictorRecord) : null;
+  }
+
+  async savePredictor(p: PredictorRecord) {
+    await this.db.collection("predictors").doc(p.vidHash).set(p);
+  }
+
+  async topPredictors(limit: number) {
+    const snap = await this.db.collection("predictors").orderBy("correct", "desc").limit(limit).get();
+    return snap.docs.map((d) => d.data() as PredictorRecord);
+  }
+
+  async claimScoring(day: string) {
+    try {
+      await this.db.collection("predictScored").doc(day).create({ day, at: new Date().toISOString() });
+      return true;
+    } catch (err) {
+      if ((err as { code?: number }).code === 6) return false; // ALREADY_EXISTS
+      throw err;
+    }
   }
 }

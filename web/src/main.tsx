@@ -15,6 +15,7 @@ import { Home } from "./pages/Home";
 import { AboutPage, ContactPage, HowItWorksPage, LedgerPage, NotFound, PrivacyPage, SessionPage, TermsPage } from "./pages/Pages";
 import { startTracking, trackView } from "./track";
 import { FeedbackButton } from "./components/Feedback";
+import { PredictPage } from "./pages/Predict";
 
 function ThemeToggle() {
   const [theme, setTheme] = useTheme();
@@ -64,9 +65,9 @@ function Nav() {
         <Link className="hide-sm" href="/how-it-works" aria-current={current("/how-it-works")}>
           How it works
         </Link>
-        <a className="hide-sm" href="/#council">
-          Council
-        </a>
+        <Link className="hide-sm" href="/predict" aria-current={current("/predict")}>
+          Predict
+        </Link>
         <Link className="hide-sm" href="/ask" aria-current={current("/ask")}>
           Ask
         </Link>
@@ -214,6 +215,7 @@ function App() {
         <Route path="/agents/:id">{(p) => <AgentPage id={p.id} />}</Route>
         <Route path="/causes/:id">{(p) => <CausePage id={p.id} />}</Route>
         <Route path="/ask" component={AskPage} />
+        <Route path="/predict" component={PredictPage} />
         <Route path="/impact/:id">{(p) => <ImpactPage id={p.id} />}</Route>
         <Route path="/admin" component={AdminPage} />
         <Route component={NotFound} />

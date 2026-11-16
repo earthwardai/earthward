@@ -12,6 +12,7 @@ import { LedgerList, VerifyChain } from "../components/Ledger";
 import { Sigil } from "../components/Sigil";
 import { ago, countdown, countryName, credits, getLedger, longDate, useLiveState, useNow, usePageMeta, useReducedMotion, useTween } from "../lib";
 import { AskTeaser } from "./Features";
+import { PredictCard } from "./Predict";
 
 export function Home() {
   usePageMeta("Earthward", "Donate virtual credits. Each night five AI agents debate where they do the most good for the planet, and every decision goes on a public ledger.");
@@ -231,6 +232,10 @@ export function Home() {
             );
           })}
         </div>
+      </section>
+
+      <section id="predict" aria-labelledby="predict-title">
+        <PredictCard />
       </section>
 
       <AskTeaser />

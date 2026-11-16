@@ -10,6 +10,8 @@ import {
   type DayStats,
   type DonationRecord,
   type NewDonation,
+  type PredictionRecord,
+  type PredictorRecord,
   type SecurityEvent,
   type StatsIncrement,
   type Store,
@@ -49,6 +51,9 @@ export class MemoryStore implements Store {
   private sessions = new Map<string, Session>();
   private quotas = new Map<string, number>();
   private grants = new Set<string>();
+  private predictions = new Map<string, PredictionRecord>();
+  private predictors = new Map<string, PredictorRecord>();
+  private scored = new Set<string>();
   private analytics: AnalyticsBatch[] = [];
   private stats = new Map<string, DayStats>();
   private visitors = new Set<string>();
@@ -262,5 +267,50 @@ export class MemoryStore implements Store {
 
   async listSecurity(limit: number) {
     return this.security.slice(-limit).reverse();
+  }
+
+  async predict(p: PredictionRecord) {
+    const key = `${p.day}_${p.vidHash}`;
+    if (this.predictions.has(key)) return "exists" as const;
+    this.predictions.set(key, { ...p });
+    return "created" as const;
+  }
+
+  async getPrediction(day: string, vidHash: string) {
+    return this.predictions.get(`${day}_${vidHash}`) ?? null;
+  }
+
+  async predictionCrowd(day: string) {
+    const counts: Record<string, number> = {};
+    let total = 0;
+    for (const p of this.predictions.values()) {
+      if (p.day !== day) continue;
+      counts[p.causeId] = (counts[p.causeId] ?? 0) + 1;
+      total += 1;
+    }
+    return { total, counts };
+  }
+
+  async listPredictions(day: string, limit: number) {
+    return [...this.predictions.values()].filter((p) => p.day === day).slice(0, limit);
+  }
+
+  async getPredictor(vidHash: string) {
+    const p = this.predictors.get(vidHash);
+    return p ? { ...p } : null;
+  }
+
+  async savePredictor(p: PredictorRecord) {
+    this.predictors.set(p.vidHash, { ...p });
+  }
+
+  async topPredictors(limit: number) {
+    return [...this.predictors.values()].sort((a, b) => b.correct - a.correct || b.streak - a.streak).slice(0, limit);
+  }
+
+  async claimScoring(day: string) {
+    if (this.scored.has(day)) return false;
+    this.scored.add(day);
+    return true;
   }
 }

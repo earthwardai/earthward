@@ -95,6 +95,27 @@ export interface ContactMessage {
   ua: string;
 }
 
+/** One visitor's guess at which cause will top tonight's decision. */
+export interface PredictionRecord {
+  day: string;
+  vidHash: string;
+  causeId: string;
+  name: string | null;
+  at: string;
+}
+
+/** A visitor's running record in the prediction game. */
+export interface PredictorRecord {
+  vidHash: string;
+  name: string | null;
+  total: number;
+  correct: number;
+  streak: number;
+  best: number;
+  lastDay: string | null;
+  lastCorrect: boolean | null;
+}
+
 export class QuotaExceededError extends Error {}
 export class SessionExistsError extends Error {}
 
@@ -132,5 +153,16 @@ export interface Store {
   listMessages(limit: number): Promise<ContactMessage[]>;
 
   recordSecurity(event: SecurityEvent): Promise<void>;
+
+  /** Saves a prediction unless this visitor already predicted that day. */
+  predict(p: PredictionRecord): Promise<"created" | "exists">;
+  getPrediction(day: string, vidHash: string): Promise<PredictionRecord | null>;
+  predictionCrowd(day: string): Promise<{ total: number; counts: Record<string, number> }>;
+  listPredictions(day: string, limit: number): Promise<PredictionRecord[]>;
+  getPredictor(vidHash: string): Promise<PredictorRecord | null>;
+  savePredictor(p: PredictorRecord): Promise<void>;
+  topPredictors(limit: number): Promise<PredictorRecord[]>;
+  /** Claims the right to score a day's predictions. True only for the first caller. */
+  claimScoring(day: string): Promise<boolean>;
   listSecurity(limit: number): Promise<SecurityEvent[]>;
 }

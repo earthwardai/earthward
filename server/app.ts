@@ -8,15 +8,16 @@ import { bodyLimit } from "hono/body-limit";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import { z } from "zod";
 import { AGENTS, AGENT_IDS } from "../shared/agents";
-import { CAUSES } from "../shared/causes";
+import { CAUSES, CAUSE_IDS } from "../shared/causes";
 import { dayKey, nextSessionAt, sessionDay } from "../shared/council";
 import { computeImpact } from "../shared/impact";
-import type { ImpactResponse, PublicDonation, StateResponse, TrackBatch } from "../shared/types";
+import type { ImpactResponse, LeaderRow, PredictionMe, PublicDonation, StateResponse, TrackBatch } from "../shared/types";
 import { config } from "./config";
 import { AskUnavailableError, askCouncil } from "./ask";
 import { runCouncil } from "./council";
 import { badgeSvg, embedHtml } from "./embed";
 import { councilImage, impactImage } from "./og";
+import { previousDay, scorePredictions, winningCauses } from "./predict";
 import { centroidOf, countryOf } from "./geo";
 import { clearInsights, getInsights } from "./insights";
 import { feedXml, injectPage, llmsTxt, pingIndexNow, renderRoute, type RenderedPage } from "./seo";
@@ -365,6 +366,69 @@ export function createApp(store: Store) {
     }
   });
 
+  // --- Predict tonight's top cause ---------------------------------------------
+
+  const PredictSchema = z.object({ causeId: z.string().max(40), name: z.string().max(40).optional() });
+  let leaderCache: { at: number; rows: LeaderRow[] } = { at: 0, rows: [] };
+
+  const visitorHash = (c: Context) => {
+    const vid = cleanText(c.req.header("x-ew-vid"), 64);
+    return vid && vid.length >= 8 ? hashId(vid) : null;
+  };
+
+  app.post("/api/predictions", async (c) => {
+    const ip = clientIp(c);
+    if (!limiters.predict.take(hashIp(ip))) return c.json({ error: "Too many predictions from your network. Try again later." }, 429);
+    const vidHash = visitorHash(c);
+    if (!vidHash) return c.json({ error: "Your browser is blocking local storage, so we can't remember your prediction." }, 400);
+    const parsed = PredictSchema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success || !(CAUSE_IDS as readonly string[]).includes(parsed.data.causeId)) return c.json({ error: "Pick one of the causes." }, 400);
+    if (!dailyCaps.predictions.take()) return c.json({ error: "Predictions are full for today. Come back tomorrow." }, 503);
+    const day = dayKey(new Date(), config.timeZone);
+    const result = await store.predict({
+      day,
+      vidHash,
+      causeId: parsed.data.causeId,
+      name: stripLinks(cleanText(parsed.data.name, 24)),
+      at: new Date().toISOString(),
+    });
+    if (result === "exists") return c.json({ error: "You've already predicted tonight. Come back after the council meets." }, 409);
+    return c.json({ ok: true }, 201);
+  });
+
+  app.get("/api/predictions/me", async (c) => {
+    const vidHash = visitorHash(c);
+    const day = dayKey(new Date(), config.timeZone);
+    const lastDay = previousDay(day);
+    const [crowd, mine, lastPrediction, lastSession, stats] = await Promise.all([
+      store.predictionCrowd(day),
+      vidHash ? store.getPrediction(day, vidHash) : null,
+      vidHash ? store.getPrediction(lastDay, vidHash) : null,
+      store.getSession(lastDay),
+      vidHash ? store.getPredictor(vidHash) : null,
+    ]);
+    const winners = lastSession ? winningCauses(lastSession) : [];
+    const body: PredictionMe = {
+      today: { day, mine: mine?.causeId ?? null, crowd },
+      last: lastPrediction && lastSession ? { day: lastDay, mine: lastPrediction.causeId, winners, correct: winners.includes(lastPrediction.causeId) } : null,
+      stats: stats ? { name: stats.name, total: stats.total, correct: stats.correct, streak: stats.streak, best: stats.best } : null,
+    };
+    c.header("Cache-Control", "private, no-store");
+    return c.json(body);
+  });
+
+  app.get("/api/predictions/leaderboard", async (c) => {
+    if (Date.now() - leaderCache.at > 5 * 60_000) {
+      const top = await store.topPredictors(20);
+      leaderCache = {
+        at: Date.now(),
+        rows: top.filter((p) => p.correct > 0).map((p) => ({ name: p.name ?? "Anonymous", correct: p.correct, total: p.total, streak: p.streak, best: p.best })),
+      };
+    }
+    c.header("Cache-Control", "public, max-age=120");
+    return c.json({ rows: leaderCache.rows });
+  });
+
   // --- Badge and embeddable card ---------------------------------------------
 
   let latestCache: { at: number; session: Awaited<ReturnType<Store["listSessions"]>>[number] | null } = { at: 0, session: null };
@@ -456,6 +520,7 @@ export function createApp(store: Store) {
       ["/earth-ai", latest],
       ["/global-ai-council", latest],
       ["/ask", today],
+      ["/predict", today],
       ["/how-it-works", today],
       ["/ledger", latest],
       ["/about", today],
@@ -568,6 +633,7 @@ export function createApp(store: Store) {
     }
     await store.ensureGenesis(config.genesisCredits);
     const result = await runCouncil(store, sessionDay(new Date(), config.timeZone));
+    if (result.status === "created") await scorePredictions(store, result.session).catch((err) => console.error("scoring failed", err));
     stateCache = null;
     latestCache = { at: 0, session: null };
     pageCache.clear();
@@ -636,6 +702,8 @@ export function createApp(store: Store) {
     await store.ensureGenesis(config.genesisCredits);
     const day = dayKey(new Date(), config.timeZone);
     const result = await runCouncil(store, day);
+    if (result.status === "created") await scorePredictions(store, result.session).catch((err) => console.error("scoring failed", err));
+    leaderCache = { at: 0, rows: [] };
     stateCache = null;
     latestCache = { at: 0, session: null };
     pageCache.clear();

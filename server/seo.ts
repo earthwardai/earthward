@@ -351,6 +351,15 @@ export async function renderRoute(store: Store, path: string): Promise<RenderedP
       body: `<main class="page prose"><h1>${esc(ASK.title)}</h1><p class="lede">${esc(ASK.lede)}</p><h2>Questions people ask</h2><ul>${ASK.suggestions.map((q) => `<li>${esc(q)}</li>`).join("")}</ul><p>Each of the five agents (${AGENTS.map((a) => esc(a.name)).join(", ")}) answers from its own mandate, then the council gives a verdict.</p></main>`,
       jsonLd: [ORG(), crumbs(["Ask the council", "/ask"]), { "@type": "WebApplication", name: `${ASK.title} | ${SITE_NAME}`, applicationCategory: "EducationalApplication", operatingSystem: "Web", url: `${config.siteUrl}/ask`, offers: { "@type": "Offer", price: "0", priceCurrency: "USD" } }],
     };
+  if (path === "/predict")
+    return {
+      status: 200,
+      path,
+      title: `Predict tonight's top cause | ${SITE_NAME}`,
+      description: "Guess which cause the five AI agents of the Earthward AI council will fund most tonight, build a streak, and climb the leaderboard.",
+      body: `<main class="page prose"><h1>Predict tonight's top cause</h1><p class="lede">Every night at 00:05 India time the five agents split the treasury. Guess which cause gets the biggest share, build a streak, and climb the leaderboard.</p><ul>${CAUSES.map((c) => `<li>${esc(c.name)}</li>`).join("")}</ul></main>`,
+      jsonLd: [ORG(), crumbs(["Predict", "/predict"])],
+    };
   if (/^\/impact\/[A-Za-z0-9-]{8,64}$/.test(path))
     return {
       status: 200,

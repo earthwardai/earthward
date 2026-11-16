@@ -303,3 +303,44 @@ describe("badge and embed", () => {
     expect(state.headers.get("content-security-policy")).toContain("frame-ancestors 'none'");
   });
 });
+
+describe("prediction game", () => {
+  it("takes one prediction per visitor, shows the crowd, and scores it after the council meets", async () => {
+    const { setLlm } = await import("../server/council");
+    setLlm(null);
+    const predict = (vid: string, body: object) =>
+      req("/api/predictions", { method: "POST", ip: freshIp(), headers: { "content-type": "application/json", "x-ew-vid": vid }, body: JSON.stringify(body) });
+    const me = async (vid: string) => (await (await req("/api/predictions/me", { headers: { "x-ew-vid": vid } })).json()) as import("../shared/types").PredictionMe;
+
+    expect((await predict("visitor-alpha-1", { causeId: "water", name: "Asha" })).status).toBe(201);
+    expect((await predict("visitor-alpha-1", { causeId: "reefs" })).status).toBe(409);
+    expect((await predict("visitor-beta-22", { causeId: "seeds" })).status).toBe(201);
+    expect((await predict("visitor-gamma-3", { causeId: "not-a-cause" })).status).toBe(400);
+    expect((await req("/api/predictions", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ causeId: "water" }) })).status).toBe(400);
+
+    const before = await me("visitor-alpha-1");
+    expect(before.today.mine).toBe("water");
+    expect(before.today.crowd.total).toBe(2);
+    expect(before.today.crowd.counts.water).toBe(1);
+
+    const run = (await (await req("/api/admin/council", { method: "POST", ip: ADMIN_IP, headers: { cookie: await adminCookie() } })).json()) as { session: import("../shared/types").Session };
+    const { winningCauses } = await import("../server/predict");
+    const winners = winningCauses(run.session);
+    const alpha = (await me("visitor-alpha-1")).stats!;
+    expect(alpha.total).toBe(1);
+    expect(alpha.correct).toBe(winners.includes("water") ? 1 : 0);
+    expect(alpha.name).toBe("Asha");
+
+    // Scoring a night twice does nothing the second time.
+    const { scorePredictions } = await import("../server/predict");
+    const { MemoryStore } = await import("../server/store/memory");
+    const fresh = new MemoryStore();
+    await fresh.predict({ day: run.session.day, vidHash: "h1", causeId: winners[0], name: null, at: new Date().toISOString() });
+    expect(await scorePredictions(fresh, run.session)).toBe(1);
+    expect(await scorePredictions(fresh, run.session)).toBe(0);
+    expect((await fresh.getPredictor("h1"))!.streak).toBe(1);
+
+    const lb = (await (await req("/api/predictions/leaderboard")).json()) as { rows: { name: string }[] };
+    expect(Array.isArray(lb.rows)).toBe(true);
+  });
+});

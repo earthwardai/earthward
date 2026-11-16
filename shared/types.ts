@@ -153,3 +153,19 @@ export type ImpactResponse =
       reserve: number;
       items: ImpactItem[];
     };
+
+/** The prediction game, from one visitor's point of view. */
+export interface PredictionMe {
+  today: { day: string; mine: string | null; crowd: { total: number; counts: Record<string, number> } };
+  /** The visitor's prediction for the most recent council night, once it has been decided. */
+  last: { day: string; mine: string; winners: string[]; correct: boolean } | null;
+  stats: { name: string | null; total: number; correct: number; streak: number; best: number } | null;
+}
+
+export interface LeaderRow {
+  name: string;
+  correct: number;
+  total: number;
+  streak: number;
+  best: number;
+}
