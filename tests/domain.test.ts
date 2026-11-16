@@ -151,3 +151,34 @@ describe("agent standing", () => {
     expect(extreme.tide / extreme.kindred).toBeCloseTo(1 + RULES.standingMax);
   });
 });
+
+describe("nightly auto-post", () => {
+  it("skips networks that aren't configured and posts to Mastodon when it is", async () => {
+    const { announceSession, postText } = await import("../server/autopost");
+    const session = {
+      day: "2026-11-20",
+      title: "Clean water leads the night",
+      spent: 501,
+      allocations: [
+        { causeId: "water", credits: 100, share: 0.2, units: 8 },
+        { causeId: "mangroves", credits: 80, share: 0.16, units: 100 },
+      ],
+    } as unknown as import("../shared/types").Session;
+    expect([...postText(session)].length).toBeLessThanOrEqual(280);
+    expect(postText(session)).toContain("/council/2026-11-20");
+
+    const calls: string[] = [];
+    const fake = (async (url: string, init: RequestInit) => {
+      calls.push(`${init.method} ${url}`);
+      expect(new Headers(init.headers).get("authorization")).toBe("Bearer test-token");
+      return new Response("{}", { status: 200 });
+    }) as unknown as typeof fetch;
+    process.env.MASTODON_URL = "https://mastodon.example";
+    process.env.MASTODON_TOKEN = "test-token";
+    const r = await announceSession(session, fake);
+    delete process.env.MASTODON_URL;
+    delete process.env.MASTODON_TOKEN;
+    expect(r).toEqual({ bluesky: "skipped", mastodon: "posted" });
+    expect(calls).toEqual(["POST https://mastodon.example/api/v1/statuses"]);
+  });
+});

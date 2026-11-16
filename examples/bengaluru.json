@@ -1,0 +1,56 @@
+{
+  "name": "Bengaluru city council (example)",
+  "agents": [
+    {
+      "id": "lakes",
+      "name": "Kere",
+      "mandate": "Lakes, groundwater and flood safety",
+      "temperament": "Patient. Remembers every monsoon.",
+      "voice": "You speak for Bengaluru's lakes and aquifers. You favour work that keeps water in the ground and stops floods, and you distrust quick fixes.",
+      "leanings": { "lake-revival": 5, "rain-harvest": 4, "storm-drains": 3 }
+    },
+    {
+      "id": "canopy",
+      "name": "Canopy",
+      "mandate": "Trees, shade and clean air",
+      "temperament": "Steady. Thinks in decades of growth.",
+      "voice": "You argue for street trees and urban forests because they cool streets and clean the air for generations.",
+      "leanings": { "street-trees": 5, "lake-revival": 2, "cycle-lanes": 1 }
+    },
+    {
+      "id": "commons",
+      "name": "Commons",
+      "mandate": "Neighbourhoods, safety and public space",
+      "temperament": "Practical. Counts people helped this year.",
+      "voice": "You push for things residents feel immediately: footpaths, lighting, waste collection and places to gather.",
+      "leanings": { "footpaths": 5, "waste": 4, "street-lights": 3 }
+    },
+    {
+      "id": "transit",
+      "name": "Metro",
+      "mandate": "Getting around without a car",
+      "temperament": "Data-driven. Asks for ridership numbers.",
+      "voice": "You favour measurable gains in how people move: bus priority, cycle lanes and last-mile links.",
+      "leanings": { "bus-lanes": 5, "cycle-lanes": 4, "footpaths": 2 }
+    },
+    {
+      "id": "futures",
+      "name": "Futures",
+      "mandate": "Resilience for the worst year",
+      "temperament": "Cautious. Plans for heatwaves and floods.",
+      "voice": "You think about the hottest summer and the heaviest rain the city has not seen yet, and you dislike betting everything on one plan.",
+      "leanings": { "storm-drains": 4, "rain-harvest": 3, "street-trees": 3 }
+    }
+  ],
+  "causes": [
+    { "id": "lake-revival", "name": "Lake revival", "domain": "lakes", "place": "Bellandur and Varthur", "creditsPerUnit": 50, "unit": "square metres of lake edge restored", "summary": "Desilting, wetlands and inlet filters that bring dead lakes back." },
+    { "id": "rain-harvest", "name": "Rainwater harvesting", "domain": "lakes", "place": "Schools and apartments", "creditsPerUnit": 120, "unit": "rooftop systems installed", "summary": "Capturing monsoon rain on rooftops to recharge groundwater." },
+    { "id": "storm-drains", "name": "Storm drain clearing", "domain": "futures", "place": "Flood-prone wards", "creditsPerUnit": 30, "unit": "metres of drain cleared", "summary": "Clearing blocked drains before the monsoon to stop street flooding." },
+    { "id": "street-trees", "name": "Street trees", "domain": "canopy", "place": "Arterial roads", "creditsPerUnit": 15, "unit": "native saplings planted and guarded", "summary": "Native shade trees with guards and two years of watering." },
+    { "id": "footpaths", "name": "Walkable footpaths", "domain": "commons", "place": "Market streets", "creditsPerUnit": 40, "unit": "metres of footpath repaired", "summary": "Level, continuous footpaths so people can walk safely." },
+    { "id": "waste", "name": "Segregated waste collection", "domain": "commons", "place": "Residential wards", "creditsPerUnit": 8, "unit": "households served for a month", "summary": "Door-to-door segregated collection and local composting." },
+    { "id": "street-lights", "name": "Street lighting", "domain": "commons", "place": "Dark stretches near stations", "creditsPerUnit": 60, "unit": "solar street lights installed", "summary": "Lighting the stretches people avoid after dark." },
+    { "id": "bus-lanes", "name": "Bus priority lanes", "domain": "transit", "place": "Outer Ring Road", "creditsPerUnit": 90, "unit": "metres of bus lane marked and enforced", "summary": "Dedicated lanes that make buses faster than cars at peak hour." },
+    { "id": "cycle-lanes", "name": "Protected cycle lanes", "domain": "transit", "place": "Metro station links", "creditsPerUnit": 70, "unit": "metres of protected cycle lane", "summary": "Separated lanes connecting homes to metro stations." }
+  ]
+}

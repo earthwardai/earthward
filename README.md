@@ -90,6 +90,16 @@ The agents talk to a model through one small interface in [`server/llm.ts`](serv
 
 Models propose, code decides. The split is always computed by [`shared/council.ts`](shared/council.ts), so a weak or misbehaving model can't break the rules. Small models (3B) argue well enough but sometimes garble numbers in the minutes; 7B and up do better.
 
+## Bring your own council
+
+The agents and causes are data. Write a JSON file with your own (a city, a school, a club), and the same engine and rules run it:
+
+```sh
+npm run council -- --config examples/bengaluru.json
+```
+
+[`examples/bengaluru.json`](examples/bengaluru.json) is a five-agent council for Bengaluru that argues over lakes, street trees, bus lanes and storm drains. The format is validated by [`shared/spec.ts`](shared/spec.ts) with readable errors: every cause belongs to one agent's domain, and leanings must name real causes. Set `COUNCIL_CONFIG=path/to/council.json` to run the server with it too. The web pages themselves still describe Earthward, and making them config-driven is a [good next contribution](https://github.com/earthwardai/earthward/issues/5).
+
 ## How a night works
 
 ```mermaid

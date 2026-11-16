@@ -15,6 +15,7 @@ import type { ArgueTally, ImpactResponse, LeaderRow, PredictionMe, PublicDonatio
 import { config } from "./config";
 import { AskUnavailableError, askCouncil } from "./ask";
 import { runCouncil } from "./council";
+import { announceSession } from "./autopost";
 import { badgeSvg, embedHtml } from "./embed";
 import { councilImage, impactImage } from "./og";
 import { runNominationRound } from "./nominations";
@@ -732,6 +733,7 @@ export function createApp(store: Store) {
     await store.ensureGenesis(config.genesisCredits);
     const result = await runCouncil(store, sessionDay(new Date(), config.timeZone));
     if (result.status === "created") await scorePredictions(store, result.session).catch((err) => console.error("scoring failed", err));
+    if (result.status === "created") void announceSession(result.session).then((r) => console.log("autopost", JSON.stringify(r)));
     // The first session of each month also settles the nomination round.
     const today = dayKey(new Date(), config.timeZone);
     if (today.endsWith("-01")) await runNominationRound(store, today.slice(0, 7)).catch((err) => console.error("nomination round failed", err));

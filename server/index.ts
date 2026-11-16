@@ -1,5 +1,7 @@
+import { readFileSync } from "node:fs";
 import { serve } from "@hono/node-server";
 import { RULES, dayKey } from "../shared/council";
+import { configureCouncil, parseSpec } from "../shared/spec";
 import { createApp } from "./app";
 import { assertProductionConfig, config } from "./config";
 import { initGeo } from "./geo";
@@ -8,6 +10,12 @@ import { MemoryStore } from "./store/memory";
 import type { Store } from "./store/types";
 
 assertProductionConfig();
+// Self-hosters can run their own agents and causes (see examples/bengaluru.json).
+if (process.env.COUNCIL_CONFIG) {
+  const spec = parseSpec(JSON.parse(readFileSync(process.env.COUNCIL_CONFIG, "utf8")));
+  configureCouncil(spec);
+  console.log(`council config: ${spec.name ?? process.env.COUNCIL_CONFIG} (${spec.agents.length} agents, ${spec.causes.length} causes)`);
+}
 await initGeo();
 
 const store: Store =
