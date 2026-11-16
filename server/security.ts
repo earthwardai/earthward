@@ -66,6 +66,34 @@ export class RateLimiter {
   }
 }
 
+/**
+ * A hard ceiling on database writes per instance per UTC day. Per-IP limits stop one visitor;
+ * this stops a flood from many addresses from running up the bill. With at most three instances,
+ * the worst case is three times each limit.
+ */
+export class DailyCap {
+  private day = "";
+  private used = 0;
+  constructor(readonly limit: number) {}
+
+  take(now = new Date()): boolean {
+    const d = now.toISOString().slice(0, 10);
+    if (d !== this.day) {
+      this.day = d;
+      this.used = 0;
+    }
+    this.used += 1;
+    return this.used <= this.limit;
+  }
+}
+
+export const dailyCaps = {
+  analytics: new DailyCap(20_000),
+  donations: new DailyCap(5_000),
+  contact: new DailyCap(200),
+  securityLog: new DailyCap(2_000),
+};
+
 export const limiters = {
   api: new RateLimiter(240, 60_000),
   donateBurst: new RateLimiter(5, 60_000),

@@ -104,6 +104,14 @@ describe("council rules", () => {
     expect(await verifyEntries(chain)).toMatchObject({ ok: true });
   });
 
+  it("caps daily writes per instance and resets the next day", async () => {
+    const { DailyCap } = await import("../server/security");
+    const cap = new DailyCap(2);
+    const d1 = new Date("2026-11-20T10:00:00Z");
+    expect([cap.take(d1), cap.take(d1), cap.take(d1)]).toEqual([true, true, false]);
+    expect(cap.take(new Date("2026-11-21T00:00:01Z"))).toBe(true);
+  });
+
   it("schedules sessions at local midnight in Kolkata", () => {
     const now = new Date("2026-11-12T10:00:00Z"); // 15:30 IST
     expect(dayKey(now, "Asia/Kolkata")).toBe("2026-11-12");

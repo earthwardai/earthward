@@ -19,6 +19,7 @@ import { feedXml, injectPage, llmsTxt, pingIndexNow, renderRoute, type RenderedP
 import {
   cleanText,
   clientIp,
+  dailyCaps,
   hashId,
   hashIp,
   isAdminIp,
@@ -117,6 +118,8 @@ export function createApp(store: Store) {
   const STATE_TTL_MS = 8_000;
 
   const security = (c: Context, kind: SecurityEvent["kind"], detail?: string) => {
+    // A flood of blocked requests must not turn into a flood of database writes.
+    if (!dailyCaps.securityLog.take()) return;
     const ip = clientIp(c);
     store
       .recordSecurity({ at: new Date().toISOString(), kind, ip, ipHash: hashIp(ip), path: c.req.path, detail })
@@ -254,6 +257,9 @@ export function createApp(store: Store) {
       security(c, "too_fast", String(body.elapsed));
       return c.json({ error: "That was quicker than a person can fill the form. Try again." }, 400);
     }
+    if (!dailyCaps.donations.take()) {
+      return c.json({ error: "The council has taken all the donations it can for today. Please come back tomorrow." }, 503);
+    }
     const country = countryOf(ip);
     const vid = cleanText(c.req.header("x-ew-vid"), 64);
     try {
@@ -304,6 +310,7 @@ export function createApp(store: Store) {
     if (email && !EMAIL.test(email)) return c.json({ error: "That email address doesn't look right." }, 400);
     const message = cleanText(body.message, 4000);
     if (!message || message.length < 10) return c.json({ error: "Write at least a sentence so we can reply." }, 400);
+    if (!dailyCaps.contact.take()) return c.json({ error: "We've had a lot of messages today. Please write again tomorrow, or email ved@earthwardai.com." }, 503);
     await store.addMessage({
       at: new Date().toISOString(),
       name: cleanText(body.name, 80),
@@ -372,6 +379,8 @@ export function createApp(store: Store) {
     const parsed = TrackSchema.safeParse(raw);
     if (!parsed.success) return c.body(null, 204);
     const batch = parsed.data as TrackBatch;
+    // Analytics are best-effort: past the daily ceiling, accept and drop.
+    if (!dailyCaps.analytics.take()) return c.body(null, 204);
     const now = new Date();
     const host = new URL(c.req.url).host;
     const inc = { views: 0, clicks: 0, paths: {} as Record<string, number>, targets: {} as Record<string, number>, referrers: {} as Record<string, number>, campaigns: {} as Record<string, number>, country: countryOf(ip) };
