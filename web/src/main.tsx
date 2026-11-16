@@ -129,6 +129,11 @@ function Footer() {
                 Source code (GitHub)
               </a>
             </li>
+            <li>
+              <a href="https://x.com/earthwardai" target="_blank" rel="noopener" data-track="footer-x">
+                Follow on X
+              </a>
+            </li>
             {support ? (
               <li>
                 <a href={support} target="_blank" rel="noopener noreferrer" data-track="footer-coffee">
