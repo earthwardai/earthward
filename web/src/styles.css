@@ -321,6 +321,40 @@ a:hover {
   }
 }
 
+.star-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 38px;
+  padding: 0 12px;
+  border: 1px solid var(--hair);
+  border-radius: 999px;
+  color: var(--ink);
+  font-size: 14px;
+  text-decoration: none;
+}
+.nav-links a.star-btn {
+  color: var(--ink);
+}
+.star-btn:hover {
+  border-color: var(--ink-2);
+}
+.star-count {
+  padding-left: 8px;
+  border-left: 1px solid var(--hair);
+  color: var(--ink-2);
+}
+@media (max-width: 720px) {
+  .star-label {
+    display: none;
+  }
+}
+@media (max-width: 480px) {
+  .star-btn {
+    display: none;
+  }
+}
+
 .theme-toggle {
   display: inline-grid;
   place-items: center;

@@ -119,7 +119,7 @@ function chapterCopy(s: Story) {
       title: "One decision.",
       body: top
         ? `The last session sent ${credits(s.spent)} credits out into the world. The largest share went to ${top.cause.name.toLowerCase()} in ${top.cause.place}.`
-        : "No cause can take more than 30%. The council spends 95% and rolls the rest over.",
+        : "No cause can take more than 30%. The council spends half the treasury each night and keeps the rest in reserve.",
     },
     { title: "Written for good.", body: "Every credit and every decision is chained into a public ledger. Change one entry and every hash after it breaks." },
   ];

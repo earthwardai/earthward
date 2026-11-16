@@ -16,10 +16,18 @@ export const config = {
   geoipDb: env.GEOIP_DB ?? "data/dbip-country-lite.mmdb",
 
   timeZone: env.COUNCIL_TZ ?? "Asia/Kolkata",
-  model: env.COUNCIL_MODEL ?? "gemini-3.5-flash",
+  /**
+   * Which model the agents use: "vertex" (Gemini on Vertex AI), "openai" (any OpenAI-compatible API,
+   * including Ollama and OpenRouter) or "off" (standing preferences only). Picked automatically when unset.
+   */
+  llm: (env.COUNCIL_LLM ?? (env.GOOGLE_CLOUD_PROJECT ? "vertex" : env.OPENAI_BASE_URL || env.OPENAI_API_KEY ? "openai" : "off")) as
+    | "vertex"
+    | "openai"
+    | "off",
+  model: env.COUNCIL_MODEL ?? (env.GOOGLE_CLOUD_PROJECT ? "gemini-3.5-flash" : ""),
   vertexLocation: env.VERTEX_LOCATION ?? "global",
-  /** Set to "off" to always use the deterministic fallback. */
-  llm: env.COUNCIL_LLM ?? "vertex",
+  openaiBaseUrl: env.OPENAI_BASE_URL ?? "https://api.openai.com/v1",
+  openaiApiKey: env.OPENAI_API_KEY ?? "",
   genesisCredits: Number(env.GENESIS_CREDITS ?? 10000),
   /** Public site address, used for the sitemap and share links. */
   siteUrl: (env.SITE_URL ?? "https://earthwardai.com").replace(/\/$/, ""),
@@ -28,6 +36,8 @@ export const config = {
   indexNowKey: /^[a-f0-9]{32}$/.test(env.INDEXNOW_KEY ?? "") ? (env.INDEXNOW_KEY as string) : "",
   /** Official profiles (X, LinkedIn, GitHub...), comma separated; added to structured data as sameAs. */
   sameAs: list(env.SAME_AS).filter((u) => /^https:\/\//.test(u)),
+  /** Public source repository ("owner/name"), shown as a Star on GitHub button. Set to "" to hide it. */
+  githubRepo: /^[\w.-]+\/[\w.-]+$/.test(env.GITHUB_REPO ?? "earthwardai/earthward") ? (env.GITHUB_REPO ?? "earthwardai/earthward") : "",
   supportUrl: env.SUPPORT_URL && /^https:\/\//.test(env.SUPPORT_URL) ? env.SUPPORT_URL : null,
 
   /** Public IPs allowed to reach the admin area (the VPN exit addresses). */

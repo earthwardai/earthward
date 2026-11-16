@@ -155,6 +155,24 @@ export class FirestoreStore implements Store {
     return snap.docs.map((d) => d.data() as LedgerEntry);
   }
 
+  async grant(day: string, credits: number) {
+    if (credits <= 0) return null;
+    const grantRef = this.db.collection("grants").doc(day);
+    return this.db.runTransaction(async (tx) => {
+      const [grantSnap, headSnap, treasurySnap] = await tx.getAll(grantRef, this.headRef, this.treasuryRef);
+      if (grantSnap.exists) return null;
+      if (!headSnap.exists) throw new Error("ledger not initialised");
+      const head = headSnap.data() as { seq: number; hash: string };
+      const treasury = { ...emptyTreasury(), ...(treasurySnap.data() as Partial<Treasury>) };
+      const entry = await makeEntry(head, "grant", { day, credits, note: "Daily grant from the simulated Earthward endowment. No real money is involved." });
+      tx.set(grantRef, { day, credits, seq: entry.seq, at: entry.at });
+      tx.set(this.ledgerRef(entry.seq), entry);
+      tx.set(this.headRef, { seq: entry.seq, hash: entry.hash });
+      tx.set(this.treasuryRef, { ...treasury, balance: treasury.balance + credits, totalGranted: (treasury.totalGranted ?? 0) + credits, updatedAt: entry.at });
+      return entry;
+    });
+  }
+
   async getSession(day: string) {
     const snap = await this.db.collection("sessions").doc(day).get();
     return snap.exists ? (snap.data() as Session) : null;

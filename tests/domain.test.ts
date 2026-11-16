@@ -77,6 +77,33 @@ describe("council rules", () => {
     expect(allocateCredits(0, shares)).toEqual({ allocations: [], spent: 0, reserve: 0 });
   });
 
+  it("adds the endowment grant once per day, on the ledger, before the council spends", async () => {
+    const { MemoryStore } = await import("../server/store/memory");
+    const { runCouncil, setLlm } = await import("../server/council");
+    setLlm(null);
+    const store = new MemoryStore();
+    await store.ensureGenesis(0);
+    const day = "2026-11-20";
+    expect(await store.grant(day, RULES.dailyGrant)).not.toBeNull();
+    expect(await store.grant(day, RULES.dailyGrant)).toBeNull();
+    expect((await store.getTreasury()).balance).toBe(RULES.dailyGrant);
+
+    // A session on a day already granted does not add a second grant.
+    const r = await runCouncil(store, day);
+    expect(r.status).toBe("created");
+    if (r.status !== "created") return;
+    expect(r.session.pool).toBe(RULES.dailyGrant);
+    expect(r.session.spent).toBe(Math.floor(RULES.dailyGrant * RULES.spendRatio));
+
+    // The next day's session brings its own grant even with no donations.
+    const next = await runCouncil(store, "2026-11-21");
+    expect(next.status === "created" && next.session.pool).toBe(RULES.dailyGrant - r.session.spent + RULES.dailyGrant);
+
+    const chain = await store.listLedger(50);
+    expect(chain.filter((e) => e.type === "grant")).toHaveLength(2);
+    expect(await verifyEntries(chain)).toMatchObject({ ok: true });
+  });
+
   it("schedules sessions at local midnight in Kolkata", () => {
     const now = new Date("2026-11-12T10:00:00Z"); // 15:30 IST
     expect(dayKey(now, "Asia/Kolkata")).toBe("2026-11-12");

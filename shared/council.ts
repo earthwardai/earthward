@@ -20,8 +20,13 @@ export interface Allocation {
 }
 
 export const RULES = {
-  /** Fraction of the pool the council may spend each session. The rest rolls over. */
-  spendRatio: 0.95,
+  /** Fraction of the pool the council may spend each session. The rest stays in reserve. */
+  spendRatio: 0.5,
+  /**
+   * Credits a simulated endowment adds to the treasury once per session day, recorded on the
+   * ledger like everything else. It keeps the council funded on nights with few donations.
+   */
+  dailyGrant: 1000,
   /** No cause may take more than this share of the spend. */
   causeCap: 0.3,
   /** Shares below this are dropped and redistributed. */

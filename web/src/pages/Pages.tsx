@@ -230,7 +230,9 @@ export function HowItWorksPage() {
         <li>Agents start with equal weight. Donor backing shifts weight toward an agent, at most tripling it relative to the others.</li>
         <li>The weighted proposals are averaged. Shares under {Math.round(RULES.causeFloor * 100)}% are dropped.</li>
         <li>No cause may take more than {Math.round(RULES.causeCap * 100)}% of the night's spend.</li>
-        <li>The council spends {Math.round(RULES.spendRatio * 100)}% of the treasury and rolls the rest over.</li>
+        <li>
+          Before each session a simulated endowment adds a grant of {RULES.dailyGrant.toLocaleString("en")} credits, recorded on the ledger. The council then spends {Math.round(RULES.spendRatio * 100)}% of the treasury and keeps the rest in reserve.
+        </li>
         <li>If the model is unavailable, an agent votes from its standing preferences and the session still happens.</li>
       </ul>
 

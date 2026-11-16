@@ -14,7 +14,8 @@
     "build": "npm run build:web && npm run build:server",
     "start": "node dist/server/index.js",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit -p tsconfig.json"
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "council": "node --import tsx scripts/council.ts"
   },
   "dependencies": {
     "@google-cloud/firestore": "^9.4.1",

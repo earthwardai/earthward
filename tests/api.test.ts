@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
+import { RULES } from "../shared/council";
 import { verifyEntries, type LedgerEntry } from "../shared/ledger";
 import type { StateResponse } from "../shared/types";
 import { createApp } from "../server/app";
@@ -147,8 +148,9 @@ describe("admin area", () => {
       session: { spent: number; reserve: number; pool: number; allocations: { share: number }[] };
     };
     expect(first.status).toBe("created");
-    expect(first.session.pool).toBe(10_400);
-    expect(first.session.spent + first.session.reserve).toBe(10_400);
+    // Genesis, the donation, and the endowment's daily grant.
+    expect(first.session.pool).toBe(10_400 + RULES.dailyGrant);
+    expect(first.session.spent + first.session.reserve).toBe(10_400 + RULES.dailyGrant);
     expect(Math.max(...first.session.allocations.map((a) => a.share))).toBeLessThanOrEqual(0.3 + 1e-9);
     const second = (await (await req("/api/admin/council", { method: "POST", ip: ADMIN_IP, headers: { cookie } })).json()) as { status: string };
     expect(second.status).toBe("exists");

@@ -48,6 +48,7 @@ export class MemoryStore implements Store {
   private days = new Map<string, DaySummary>();
   private sessions = new Map<string, Session>();
   private quotas = new Map<string, number>();
+  private grants = new Set<string>();
   private analytics: AnalyticsBatch[] = [];
   private stats = new Map<string, DayStats>();
   private visitors = new Set<string>();
@@ -148,6 +149,19 @@ export class MemoryStore implements Store {
   async listLedger(limit: number, beforeSeq?: number) {
     const pool = beforeSeq === undefined ? this.ledger : this.ledger.filter((e) => e.seq < beforeSeq);
     return pool.slice(-limit).reverse();
+  }
+
+  grant(day: string, credits: number) {
+    return this.exclusive(async () => {
+      if (this.grants.has(day) || credits <= 0) return null;
+      const head = this.head();
+      if (!head) throw new Error("ledger not initialised");
+      const entry = await makeEntry(head, "grant", { day, credits, note: "Daily grant from the simulated Earthward endowment. No real money is involved." });
+      this.ledger.push(entry);
+      this.grants.add(day);
+      this.treasury = { ...this.treasury, balance: this.treasury.balance + credits, totalGranted: (this.treasury.totalGranted ?? 0) + credits, updatedAt: entry.at };
+      return entry;
+    });
   }
 
   async getSession(day: string) {

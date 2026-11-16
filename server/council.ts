@@ -1,4 +1,3 @@
-import { GoogleGenAI } from "@google/genai";
 import { AGENTS, agentById, type Agent } from "../shared/agents";
 import { CAUSES, CAUSE_IDS, causeById } from "../shared/causes";
 import {
@@ -12,45 +11,23 @@ import {
   type Proposal,
 } from "../shared/council";
 import type { Session } from "../shared/types";
-import { config } from "./config";
+import { createLlm, type Llm } from "./llm";
 import { SessionExistsError, type Store } from "./store/types";
 
-let client: GoogleGenAI | null = null;
-function ai(): GoogleGenAI {
-  client ??= new GoogleGenAI({ vertexai: true, project: config.project, location: config.vertexLocation });
-  return client;
+let llmInstance: Llm | null | undefined;
+/** The model the council uses, created once. Tests and the CLI can swap it with setLlm. */
+export function getLlm(): Llm | null {
+  if (llmInstance === undefined) llmInstance = createLlm();
+  return llmInstance;
+}
+export function setLlm(llm: Llm | null) {
+  llmInstance = llm;
 }
 
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-
-/** Retries quota (429) and overload (503) errors; new projects get small Vertex quotas. */
-async function withRetry<T>(fn: () => Promise<T>, attempts = 5): Promise<T> {
-  for (let i = 1; ; i++) {
-    try {
-      return await fn();
-    } catch (err) {
-      const status = (err as { status?: number }).status;
-      if (i >= attempts || (status !== 429 && status !== 503)) throw err;
-      await sleep(2000 * 2 ** (i - 1) + Math.random() * 500);
-    }
-  }
-}
-
-async function generateJson<T>(system: string, prompt: string, schema: object): Promise<T> {
-  const res = await withRetry(() => ai().models.generateContent({
-    model: config.model,
-    contents: prompt,
-    config: {
-      systemInstruction: system,
-      responseMimeType: "application/json",
-      responseJsonSchema: schema,
-      temperature: 0.8,
-      maxOutputTokens: 4096,
-    },
-  }));
-  const text = res.text;
-  if (!text) throw new Error("empty model response");
-  return JSON.parse(text) as T;
+function generateJson<T>(system: string, prompt: string, schema: object): Promise<T> {
+  const llm = getLlm();
+  if (!llm) throw new Error("no model configured");
+  return llm.generateJson<T>(system, prompt, schema);
 }
 
 const causeCatalog = CAUSES.map(
@@ -78,7 +55,7 @@ function briefing(ctx: Context): string {
     ? ctx.messages.map((m) => `  <note from="${(m.name ?? "anonymous").replace(/"/g, "")}">${m.message}</note>`).join("\n")
     : "  (none)";
   return [
-    `Session for ${ctx.day}. Treasury pool: ${ctx.pool} credits. The council will spend ${Math.round(RULES.spendRatio * 100)}% and roll the rest over.`,
+    `Session for ${ctx.day}. Treasury pool: ${ctx.pool} credits, including tonight's ${RULES.dailyGrant}-credit endowment grant. The council will spend ${Math.round(RULES.spendRatio * 100)}% and keep the rest in reserve.`,
     `Today: ${ctx.donations} donations totalling ${ctx.credits} credits. Donor endorsements: ${endorse}.`,
     `Previous allocation: ${prev}.`,
     `Rules: no cause may exceed ${Math.round(RULES.causeCap * 100)}% of spend; shares under ${Math.round(RULES.causeFloor * 100)}% are dropped.`,
@@ -164,7 +141,7 @@ async function writeMinutes(ctx: Context, proposals: Proposal[], weights: Record
     .join("\n");
   return generateJson<{ title: string; minutes: string }>(
     "You are the clerk of the Earthward council, a public simulation run by five AI stewards. Write the official minutes in a calm, factual register, like the minutes of a serious public body. Mention agents by name, note real disagreement where it exists, never invent numbers, and write numbers with thousands separators (10,990, not 10990).",
-    `Session ${ctx.day}. Pool ${ctx.pool} credits from ${ctx.donations} donations today.\nPositions:\n${views}\n\nFinal allocation: ${describe(allocations)}. ${reserve} credits roll over.\nWrite the minutes.`,
+    `Session ${ctx.day}. Pool ${ctx.pool} credits from ${ctx.donations} donations today.\nPositions:\n${views}\n\nFinal allocation: ${describe(allocations)}. ${reserve} credits stay in reserve.\nWrite the minutes.`,
     minutesSchema,
   );
 }
@@ -179,7 +156,7 @@ function templateMinutes(ctx: Context, weights: Record<string, number>, allocati
           lead.name
         } carried the most weight after donor endorsements. Members worked from their standing preferences this session. ${reserve.toLocaleString(
           "en",
-        )} credits roll over to the next session.`
+        )} credits stay in reserve for the next session.`
       : "The treasury held no credits to allocate. The council adjourned until the next session.",
   };
 }
@@ -189,6 +166,9 @@ export type CouncilResult = { status: "created"; session: Session } | { status: 
 /** Runs one council session for `day`. Idempotent: a second run for the same day is a no-op. */
 export async function runCouncil(store: Store, day: string, now = new Date()): Promise<CouncilResult> {
   if (await store.getSession(day)) return { status: "exists", day };
+
+  // The endowment's grant for this day lands before the pool is measured. Idempotent per day.
+  await store.grant(day, RULES.dailyGrant);
 
   const [treasury, summary, messages, previous] = await Promise.all([
     store.getTreasury(),
@@ -206,7 +186,7 @@ export async function runCouncil(store: Store, day: string, now = new Date()): P
     previous: previous[0]?.allocations ?? null,
   };
   const weights = influence(summary.endorsements);
-  const useModel = config.llm !== "off" && Boolean(config.project);
+  const useModel = getLlm() !== null;
 
   // One agent at a time: slower, but stays inside small per-minute model quotas.
   const proposals: Proposal[] = [];
@@ -236,7 +216,7 @@ export async function runCouncil(store: Store, day: string, now = new Date()): P
     }
   }
 
-  const modelUsed = proposals.some((p) => p.source === "model") ? config.model : "fallback";
+  const modelUsed = proposals.some((p) => p.source === "model") ? (getLlm()?.model ?? "model") : "fallback";
   try {
     const session = await store.commitSession({
       day,

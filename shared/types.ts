@@ -12,6 +12,8 @@ export interface Treasury {
   updatedAt: string;
   /** Donations per ISO country code. */
   countries?: Record<string, number>;
+  /** Credits added by the endowment's daily grants. */
+  totalGranted?: number;
 }
 
 export interface PublicDonation {
@@ -61,7 +63,7 @@ export interface StateResponse {
   latestSession: Session | null;
   head: { seq: number; hash: string } | null;
   stats: { sessions: number; countries: number };
-  links: { support: string | null };
+  links: { support: string | null; github: { url: string; stars: number | null } | null };
   health: { status: "ok"; version: string; startedAt: string; lastSessionAt: string | null };
 }
 

@@ -11,6 +11,7 @@ export function describeEntry(e: LedgerEntry): string {
     const backing = d.agentId ? `, backing ${agentById(String(d.agentId))?.name}` : "";
     return `${who} donated ${credits(Number(d.amount))} credits${backing}`;
   }
+  if (e.type === "grant") return `Endowment grant of ${credits(Number(d.credits))} credits for ${String(d.day)}`;
   const n = Array.isArray(d.allocations) ? d.allocations.length : 0;
   return `Council allocated ${credits(Number(d.spent))} credits across ${n} causes for ${String(d.day)}`;
 }

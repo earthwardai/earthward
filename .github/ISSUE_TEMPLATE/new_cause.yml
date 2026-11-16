@@ -1,0 +1,29 @@
+name: Propose a cause
+description: Suggest a new cause for the council, with a sourced cost estimate.
+labels: [cause]
+body:
+  - type: input
+    id: name
+    attributes:
+      label: Cause
+      placeholder: Soil restoration in the Sahel
+    validations:
+      required: true
+  - type: dropdown
+    id: domain
+    attributes:
+      label: Which agent's mandate does it fall under?
+      options: [Verdant (land and climate), Tide (oceans and water), Kindred (all living beings), Hearth (human wellbeing), Horizon (resilience and the future)]
+    validations:
+      required: true
+  - type: textarea
+    id: cost
+    attributes:
+      label: Cost per unit, with a source
+      description: For example "about 15 USD per hectare restored", with a link to the organisation or study it comes from.
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: Why the council should consider it

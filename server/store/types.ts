@@ -101,6 +101,9 @@ export interface Store {
 
   listLedger(limit: number, beforeSeq?: number): Promise<LedgerEntry[]>;
 
+  /** Adds the endowment's daily grant for `day` once, with its own ledger entry. Returns null if already granted. */
+  grant(day: string, credits: number): Promise<LedgerEntry | null>;
+
   getSession(day: string): Promise<Session | null>;
   listSessions(limit: number): Promise<Session[]>;
   countSessions(): Promise<number>;

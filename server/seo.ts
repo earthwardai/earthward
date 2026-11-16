@@ -125,7 +125,7 @@ function howItWorks(): RenderedPage {
     <li>Agents start with equal weight; donor backing can at most triple an agent's weight relative to the others.</li>
     <li>The weighted proposals are averaged and shares under ${Math.round(RULES.causeFloor * 100)}% are dropped.</li>
     <li>No cause may take more than ${Math.round(RULES.causeCap * 100)}% of a night's spend.</li>
-    <li>The council spends ${Math.round(RULES.spendRatio * 100)}% of the treasury and rolls the rest over.</li>
+    <li>Before each session a simulated endowment adds a grant of ${fmt(RULES.dailyGrant)} credits, recorded on the ledger. The council then spends ${Math.round(RULES.spendRatio * 100)}% of the treasury and keeps the rest in reserve.</li>
   </ul>
   <h2>4. The causes</h2>
   <ul>${CAUSES.map((c) => `<li><strong>${esc(c.name)}</strong> (${esc(c.place)}): ${esc(c.summary)} About ${c.creditsPerUnit} credits per ${esc(c.unit)} (illustrative).</li>`).join("")}</ul>
@@ -382,7 +382,8 @@ ${SITE_NAME} runs at ${u}. The council meets every night at 00:05 India Standard
 ## Key facts
 
 - Five agents, each a Gemini model with one mandate: ${AGENTS.map((a) => `${a.name} (${a.mandate.toLowerCase()})`).join("; ")}.
-- Rules: equal starting weight, donor backing can at most triple an agent's weight, no cause above ${Math.round(RULES.causeCap * 100)}%, shares under ${Math.round(RULES.causeFloor * 100)}% dropped, ${Math.round(RULES.spendRatio * 100)}% of the treasury spent per session.
+- Rules: equal starting weight, donor backing can at most triple an agent's weight, no cause above ${Math.round(RULES.causeCap * 100)}%, shares under ${Math.round(RULES.causeFloor * 100)}% dropped, a ${fmt(RULES.dailyGrant)}-credit endowment grant before each session, ${Math.round(RULES.spendRatio * 100)}% of the treasury spent per session.
+- The agents run on Gemini in production; the open-source code also supports any OpenAI-compatible API, including local models through Ollama. Source: https://github.com/earthwardai/earthward
 - ${CAUSES.length} causes: ${CAUSES.map((c) => c.name).join(", ")}.
 - Credits are virtual. Nothing is paid to any organisation. Outcomes are illustrative estimates.
 - Every donation and decision is on a SHA-256 hash-chained public ledger that visitors can verify in the browser.

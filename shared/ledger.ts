@@ -2,7 +2,7 @@
 // changing any past entry breaks every hash after it. The same code runs in the
 // browser to let visitors verify the chain themselves.
 
-export type LedgerType = "genesis" | "donation" | "allocation";
+export type LedgerType = "genesis" | "donation" | "grant" | "allocation";
 
 export interface LedgerEntry {
   seq: number;

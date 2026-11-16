@@ -94,6 +94,25 @@ const oauth = new OAuth2Client();
 export function createApp(store: Store) {
   const app = new Hono();
   let stateCache: { at: number; body: StateResponse } | null = null;
+
+  // Star count for the Star on GitHub button. Unauthenticated API calls are limited to 60 an hour,
+  // so the count is refreshed at most every 15 minutes and a failure keeps the last known value.
+  let stars: { at: number; count: number | null } = { at: 0, count: null };
+  const githubStars = async (): Promise<number | null> => {
+    if (!config.githubRepo || process.env.VITEST) return stars.count;
+    if (Date.now() - stars.at < 15 * 60_000) return stars.count;
+    stars = { ...stars, at: Date.now() };
+    try {
+      const res = await fetch(`https://api.github.com/repos/${config.githubRepo}`, {
+        headers: { accept: "application/vnd.github+json", "user-agent": "earthwardai.com" },
+        signal: AbortSignal.timeout(3000),
+      });
+      if (res.ok) stars = { at: Date.now(), count: Number(((await res.json()) as { stargazers_count?: number }).stargazers_count ?? 0) };
+    } catch {
+      /* keep the last known count */
+    }
+    return stars.count;
+  };
   const pageCache = new Map<string, { at: number; page: RenderedPage | null }>();
   const STATE_TTL_MS = 8_000;
 
@@ -174,7 +193,10 @@ export function createApp(store: Store) {
         latestSession: latest,
         head,
         stats: { sessions: sessionCount, countries: Object.keys(treasury.countries ?? {}).length },
-        links: { support: config.supportUrl },
+        links: {
+          support: config.supportUrl,
+          github: config.githubRepo ? { url: `https://github.com/${config.githubRepo}`, stars: await githubStars() } : null,
+        },
         health: { status: "ok", version: config.version, startedAt, lastSessionAt: latest?.at ?? null },
       };
       stateCache = { at: Date.now(), body };
