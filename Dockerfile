@@ -1,12 +1,12 @@
 # Build the web app and server bundle, then ship only what runs.
-FROM node:24-slim AS build
+FROM node:26-slim AS build
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci --ignore-scripts --no-audit --no-fund
 COPY . .
 RUN npm run build && npm prune --omit=dev --ignore-scripts
 
-FROM node:24-slim
+FROM node:26-slim
 ENV NODE_ENV=production \
     PORT=8080 \
     STATIC_DIR=/app/dist/web \
