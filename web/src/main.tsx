@@ -14,6 +14,7 @@ import { AskPage, ImpactPage } from "./pages/Features";
 import { Home } from "./pages/Home";
 import { AboutPage, ContactPage, HowItWorksPage, LedgerPage, NotFound, PrivacyPage, SessionPage, TermsPage } from "./pages/Pages";
 import { startTracking, trackView } from "./track";
+import { FeedbackButton } from "./components/Feedback";
 
 function ThemeToggle() {
   const [theme, setTheme] = useTheme();
@@ -138,7 +139,7 @@ function Footer() {
               <Link href="/about">About</Link>
             </li>
             <li>
-              <Link href="/contact">Contact</Link>
+              <Link href="/contact">Contact and feedback</Link>
             </li>
             <li>
               <a href="/feed.xml">Minutes feed (RSS)</a>
@@ -219,6 +220,7 @@ function App() {
       </Switch>
       <Footer />
       <DonateDialog />
+      <FeedbackButton />
     </>
   );
 }

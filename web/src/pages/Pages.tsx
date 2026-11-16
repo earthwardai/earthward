@@ -11,6 +11,7 @@ import { LedgerList, VerifyChain } from "../components/Ledger";
 import { Share } from "../components/Share";
 import { Sigil } from "../components/Sigil";
 import { api, ApiError, credits, getLedger, getSession, getSessions, longDate, usePageMeta } from "../lib";
+import { FeedbackForm } from "../components/Feedback";
 
 export function LedgerPage() {
   usePageMeta("The ledger", "Every Earthward donation and council decision, chained by SHA-256 hashes you can verify in your browser.");
@@ -280,81 +281,14 @@ export function TermsPage() {
 }
 
 export function ContactPage() {
-  usePageMeta("Contact", "Write to the Earthward team.");
-  const openedAt = useRef(Date.now());
-  const [form, setForm] = useState({ name: "", email: "", message: "" });
-  const [status, setStatus] = useState<{ kind: "idle" | "busy" | "sent" | "error"; text?: string }>({ kind: "idle" });
-
-  async function submit(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    const trap = new FormData(e.currentTarget).get("website");
-    setStatus({ kind: "busy" });
-    try {
-      await api("/api/contact", {
-        method: "POST",
-        body: JSON.stringify({
-          name: form.name.trim() || undefined,
-          email: form.email.trim() || undefined,
-          message: form.message,
-          website: typeof trap === "string" && trap ? trap : undefined,
-          elapsed: Date.now() - openedAt.current,
-        }),
-      });
-      setStatus({ kind: "sent" });
-      setForm({ name: "", email: "", message: "" });
-    } catch (err) {
-      setStatus({ kind: "error", text: err instanceof ApiError ? err.message : "The message didn't send. Check your connection and try again." });
-    }
-  }
-
+  usePageMeta("Contact and feedback", "Send the Earthward AI team a suggestion, question, feedback, bug report or partnership idea.");
   return (
     <main id="main" className="page">
-      <h1>Contact</h1>
-      <p className="lede">Questions, partnerships, press, or a cause you think the council is missing. Leave an email if you'd like a reply.</p>
-      {status.kind === "sent" ? (
-        <p className="form-ok" role="status" style={{ marginTop: 40 }}>
-          Message sent. Thank you for writing.
-        </p>
-      ) : (
-        <form className="contact-form" onSubmit={submit} noValidate>
-          <div className="row">
-            <div>
-              <label className="field-label" htmlFor="c-name">
-                Name
-              </label>
-              <input id="c-name" className="text-input" maxLength={80} autoComplete="name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
-            </div>
-            <div>
-              <label className="field-label" htmlFor="c-email">
-                Email (for a reply)
-              </label>
-              <input id="c-email" className="text-input" type="email" maxLength={160} autoComplete="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
-            </div>
-          </div>
-          <div>
-            <label className="field-label" htmlFor="c-msg">
-              Message
-            </label>
-            <textarea id="c-msg" className="text-input" style={{ minHeight: 160 }} maxLength={4000} required value={form.message} onChange={(e) => setForm({ ...form, message: e.target.value })} />
-          </div>
-          <div className="trap" aria-hidden="true">
-            <label>
-              Website
-              <input name="website" tabIndex={-1} autoComplete="off" />
-            </label>
-          </div>
-          {status.kind === "error" ? (
-            <p className="form-error" role="alert">
-              {status.text}
-            </p>
-          ) : null}
-          <div>
-            <button type="submit" className="btn" disabled={status.kind === "busy"} data-track="contact-send">
-              {status.kind === "busy" ? "Sending…" : "Send message"}
-            </button>
-          </div>
-        </form>
-      )}
+      <h1>Contact and feedback</h1>
+      <p className="lede">Suggestions, questions, feedback, something broken, or a partnership idea. A person reads every message. Leave an email if you'd like a reply.</p>
+      <div style={{ marginTop: 32, maxWidth: 760 }}>
+        <FeedbackForm initialKind={new URLSearchParams(window.location.search).get("kind") === "suggestion" ? "suggestion" : "feedback"} />
+      </div>
     </main>
   );
 }

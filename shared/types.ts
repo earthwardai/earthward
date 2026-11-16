@@ -55,7 +55,7 @@ export interface AgentLive {
 
 export interface StateResponse {
   treasury: Treasury;
-  today: { day: string; donations: number; credits: number };
+  today: { day: string; donations: number; credits: number; asks: number };
   nextSessionAt: string;
   timeZone: string;
   agents: AgentLive[];

@@ -119,3 +119,13 @@ export const ASK = {
     "Do animals deserve the same share as people?",
   ],
 };
+
+/** What a visitor is writing to us about. Shown as choices on the feedback form and labels in admin. */
+export const FEEDBACK_KINDS = [
+  { id: "suggestion", label: "Suggestion" },
+  { id: "question", label: "Question" },
+  { id: "feedback", label: "Feedback" },
+  { id: "bug", label: "Something's broken" },
+  { id: "partnership", label: "Partnership or press" },
+] as const;
+export type FeedbackKind = (typeof FEEDBACK_KINDS)[number]["id"];

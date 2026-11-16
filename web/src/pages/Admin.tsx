@@ -37,7 +37,7 @@ interface Overview {
   visits: Visit[];
   donations: { at: string; amount: number; name: string | null; agentId: string | null; country: string | null; ipHash: string; vid: string | null; seq: number }[];
   security: { at: string; kind: string; ip: string; path: string; detail?: string }[];
-  messages: { at: string; name: string | null; email: string | null; message: string; ip: string; country: string | null }[];
+  messages: { at: string; kind?: string; page?: string | null; name: string | null; email: string | null; message: string; ip: string; country: string | null }[];
   treasury: Treasury;
   sessions: Session[];
   github: { repo: string; stars: number | null; forks: number | null; issues: number | null } | null;
@@ -248,6 +248,7 @@ export function AdminPage() {
         <div className="kpi"><dt>Donation rate, 7 days</dt><dd>{pctOf(sum("donations"), people7)}</dd></div>
         <div className="kpi"><dt>Questions, 7 days</dt><dd>{credits(week.reduce((n, d) => n + (d.asks ?? 0), 0))}</dd></div>
         <div className="kpi"><dt>Page views today</dt><dd>{credits(today?.views ?? 0)}</dd></div>
+        <div className="kpi"><dt>Messages, 7 days</dt><dd>{credits(data.messages.filter((m) => Date.now() - new Date(m.at).getTime() < 7 * 86_400_000).length)}</dd></div>
         <div className="kpi"><dt>Treasury</dt><dd>{credits(data.treasury.balance)}</dd></div>
         {data.github ? (
           <div className="kpi">
@@ -296,6 +297,7 @@ export function AdminPage() {
               <thead>
                 <tr>
                   <th>Time</th>
+                  <th>Type</th>
                   <th>From</th>
                   <th>Message</th>
                   <th>IP</th>
@@ -306,6 +308,10 @@ export function AdminPage() {
                 {data.messages.map((m, i) => (
                   <tr key={`${m.at}-${i}`}>
                     <td className="num">{time(m.at)}</td>
+                    <td>
+                      {m.kind ?? "feedback"}
+                      {m.page ? <div className="muted">{m.page}</div> : null}
+                    </td>
                     <td>
                       {m.name ?? "Anonymous"}
                       {m.email ? (

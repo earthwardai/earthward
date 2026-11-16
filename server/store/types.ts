@@ -82,6 +82,10 @@ export interface SecurityEvent {
 
 export interface ContactMessage {
   at: string;
+  /** suggestion, question, feedback, bug or partnership. */
+  kind?: string;
+  /** The page the visitor was on when they wrote. */
+  page?: string | null;
   name: string | null;
   email: string | null;
   message: string;

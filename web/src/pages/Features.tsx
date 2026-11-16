@@ -6,7 +6,7 @@ import { ASK } from "../../../shared/content";
 import type { AskResponse, ImpactResponse } from "../../../shared/types";
 import { Share } from "../components/Share";
 import { Sigil } from "../components/Sigil";
-import { ApiError, api, countdown, credits, longDate, useNow, usePageMeta } from "../lib";
+import { ApiError, api, countdown, credits, longDate, useLiveState, useNow, usePageMeta } from "../lib";
 
 const STANCE: Record<AskResponse["views"][number]["stance"], string> = { for: "For", against: "Against", mixed: "It depends" };
 const agentStyle = (id: string) => ({ ["--agent" as string]: `var(--${id})` });
@@ -106,12 +106,18 @@ export function AskPage() {
 
 /** A short invitation on the home page. */
 export function AskTeaser() {
+  const asks = useLiveState()?.today.asks ?? 0;
   return (
     <section id="ask" aria-labelledby="ask-title">
       <div className="section-head">
         <div>
           <h2 id="ask-title">Ask the council</h2>
           <p className="lede">Bring your own dilemma. All five agents answer from their mandates, and the council gives a verdict in seconds.</p>
+          {asks > 0 ? (
+            <p className="hint num">
+              {credits(asks)} {asks === 1 ? "question" : "questions"} answered today
+            </p>
+          ) : null}
         </div>
       </div>
       <div className="ask-suggest">

@@ -94,6 +94,8 @@ export const dailyCaps = {
   securityLog: new DailyCap(2_000),
   /** Each question is one model call, so this also bounds the model bill. */
   ask: new DailyCap(300),
+  /** Share images rendered from scratch (cache misses). */
+  og: new DailyCap(1_500),
 };
 
 export const limiters = {

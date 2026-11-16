@@ -292,6 +292,10 @@ export class FirestoreStore implements Store {
         countries: d.countries ?? {},
         referrers: d.referrers ?? {},
         campaigns: d.campaigns ?? {},
+        // Counters added later; absent on older days.
+        ...(d.humanViews !== undefined ? { humanViews: d.humanViews } : {}),
+        ...(d.humanUniques !== undefined ? { humanUniques: d.humanUniques } : {}),
+        ...(d.asks !== undefined ? { asks: d.asks } : {}),
       };
     });
   }

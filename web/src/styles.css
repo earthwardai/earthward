@@ -2375,3 +2375,48 @@ textarea.text-input {
   color: var(--ink-2);
   font-size: 15px;
 }
+
+/* --- Feedback ------------------------------------------------------------- */
+
+.feedback-fab {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  z-index: 40;
+  padding: 10px 18px;
+  border: 1px solid var(--hair);
+  border-radius: 999px;
+  background: var(--lift);
+  color: var(--ink);
+  font: inherit;
+  font-size: 14px;
+  box-shadow: 0 6px 24px rgb(0 0 0 / 0.18);
+  cursor: pointer;
+}
+.feedback-fab:hover {
+  border-color: var(--gold);
+}
+.feedback-fab:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+}
+@media print {
+  .feedback-fab {
+    display: none;
+  }
+}
+.feedback-kinds {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.contact-form.compact {
+  gap: 16px;
+  max-width: none;
+  margin-top: 8px;
+}
+.feedback-sent {
+  display: grid;
+  gap: 12px;
+  justify-items: start;
+}

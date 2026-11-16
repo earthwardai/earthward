@@ -33,6 +33,8 @@ export interface RenderedPage {
   ogType?: "website" | "article";
   /** Set to keep a page out of search results, for example a donor's private receipt. */
   noindex?: boolean;
+  /** A page-specific share image; the brand image is used otherwise. */
+  ogImage?: string;
 }
 
 const ORG = () => ({
@@ -179,6 +181,7 @@ async function sessionPage(store: Store, day: string): Promise<RenderedPage> {
     description: `${s.minutes.slice(0, 150).replace(/\s+\S*$/, "")}…`,
     body,
     ogType: "article",
+    ogImage: `${config.siteUrl}/og/council/${s.day}.png`,
     jsonLd: [
       ORG(),
       {
@@ -357,6 +360,7 @@ export async function renderRoute(store: Store, path: string): Promise<RenderedP
       body: `<main class="page prose"><h1>Where my credits went</h1><p class="lede">A donor's share of one night's decision by the Earthward AI council.</p><p><a href="/">See the live council</a></p></main>`,
       jsonLd: [ORG()],
       noindex: true,
+      ogImage: `${config.siteUrl}/og/impact/${path.split("/").pop()}.png`,
     };
   const s = simple[path];
   if (s)
@@ -384,6 +388,7 @@ export function injectPage(indexHtml: string, page: RenderedPage): string {
     .replace(/<meta property="og:type" content="[^"]*" \/>/, `<meta property="og:type" content="${page.ogType ?? "website"}" />`)
     .replace(/<meta property="og:title" content="[^"]*" \/>/, `<meta property="og:title" content="${esc(page.title)}" />\n    <meta property="og:url" content="${esc(url)}" />`)
     .replace(/<meta property="og:description" content="[^"]*" \/>/, `<meta property="og:description" content="${esc(page.description)}" />`)
+    .replace(/<meta property="og:image" content="[^"]*" \/>/, (m) => (page.ogImage ? `<meta property="og:image" content="${esc(page.ogImage)}" />\n    <meta name="twitter:image" content="${esc(page.ogImage)}" />` : m))
     .replace(/<script type="application\/ld\+json">[\s\S]*?<\/script>/, ld)
     .replace("</head>", page.noindex ? `  <meta name="robots" content="noindex" />\n  </head>` : "</head>")
     .replace('<div id="root"></div>', `<div id="root"><div class="ssr">${page.body}</div></div>`);

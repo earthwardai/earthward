@@ -15,6 +15,7 @@ import type { ImpactResponse, PublicDonation, StateResponse, TrackBatch } from "
 import { config } from "./config";
 import { AskUnavailableError, askCouncil } from "./ask";
 import { runCouncil } from "./council";
+import { councilImage, impactImage } from "./og";
 import { centroidOf, countryOf } from "./geo";
 import { clearInsights, getInsights } from "./insights";
 import { feedXml, injectPage, llmsTxt, pingIndexNow, renderRoute, type RenderedPage } from "./seo";
@@ -58,6 +59,8 @@ const DonationSchema = z.object({
 });
 
 const ContactSchema = z.object({
+  kind: z.enum(["suggestion", "question", "feedback", "bug", "partnership"]).optional(),
+  page: z.string().max(200).optional(),
   name: z.string().max(80).optional(),
   email: z.string().max(160).optional(),
   message: z.string().min(1).max(4000),
@@ -172,13 +175,14 @@ export function createApp(store: Store) {
     if (!stateCache || Date.now() - stateCache.at > STATE_TTL_MS) {
       const now = new Date();
       const today = dayKey(now, config.timeZone);
-      const [treasury, summary, recent, sessions, head, sessionCount] = await Promise.all([
+      const [treasury, summary, recent, sessions, head, sessionCount, [todayStats]] = await Promise.all([
         store.getTreasury(),
         store.getDaySummary(today),
         store.listDonations(24),
         store.listSessions(1),
         store.getHead(),
         store.countSessions(),
+        store.getStats([today]),
       ]);
       const latest = sessions[0] ?? null;
       // A session decides on the day that just ended. If today's already happened
@@ -187,7 +191,7 @@ export function createApp(store: Store) {
       if (latest?.day === today) next = new Date(next.getTime() + 86_400_000);
       const body: StateResponse = {
         treasury,
-        today: { day: today, donations: summary.donations, credits: summary.credits },
+        today: { day: today, donations: summary.donations, credits: summary.credits, asks: todayStats?.asks ?? 0 },
         nextSessionAt: next.toISOString(),
         timeZone: config.timeZone,
         agents: AGENTS.map((a) => {
@@ -321,6 +325,8 @@ export function createApp(store: Store) {
     if (!dailyCaps.contact.take()) return c.json({ error: "We've had a lot of messages today. Please write again tomorrow, or email ved@earthwardai.com." }, 503);
     await store.addMessage({
       at: new Date().toISOString(),
+      kind: body.kind ?? "feedback",
+      page: cleanText(body.page, 200),
       name: cleanText(body.name, 80),
       email,
       message,
@@ -356,6 +362,47 @@ export function createApp(store: Store) {
       console.error("ask failed", err);
       return c.json({ error: "The council couldn't agree on an answer. Try asking again in a moment." }, 502);
     }
+  });
+
+  // --- Share images ----------------------------------------------------------
+
+  const ogCache = new Map<string, Buffer>();
+  const png = (c: Context, buf: Buffer, maxAge: number) => {
+    c.header("Content-Type", "image/png");
+    c.header("Cache-Control", `public, max-age=${maxAge}`);
+    return c.body(new Uint8Array(buf));
+  };
+  const remember = (key: string, buf: Buffer) => {
+    if (ogCache.size >= 300) ogCache.delete(ogCache.keys().next().value as string);
+    ogCache.set(key, buf);
+    return buf;
+  };
+
+  app.get("/og/council/:file", async (c) => {
+    const day = c.req.param("file").replace(/\.png$/, "");
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return c.text("Not found", 404);
+    const key = `council:${day}`;
+    const hit = ogCache.get(key);
+    if (hit) return png(c, hit, 86_400);
+    const session = await store.getSession(day);
+    if (!session) return c.text("Not found", 404);
+    if (!dailyCaps.og.take()) return c.redirect("/brand/og.jpg", 302);
+    return png(c, remember(key, await councilImage(session)), 86_400);
+  });
+
+  app.get("/og/impact/:file", async (c) => {
+    const id = c.req.param("file").replace(/\.png$/, "");
+    if (!/^[A-Za-z0-9-]{8,64}$/.test(id)) return c.text("Not found", 404);
+    const donation = await store.getDonation(id);
+    if (!donation) return c.text("Not found", 404);
+    const session = await store.getSession(donation.day);
+    if (!session) return c.redirect("/brand/og.jpg", 302);
+    const key = `impact:${id}`;
+    const hit = ogCache.get(key);
+    if (hit) return png(c, hit, 86_400);
+    if (!dailyCaps.og.take()) return c.redirect("/brand/og.jpg", 302);
+    const { items } = computeImpact(donation.amount, session);
+    return png(c, remember(key, await impactImage(donation.amount, items)), 86_400);
   });
 
   // --- A donor's receipt: where their credits went ---------------------------

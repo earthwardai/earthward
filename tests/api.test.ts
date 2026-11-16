@@ -21,6 +21,17 @@ function req(path: string, init: RequestInit & { ip?: string } = {}) {
 const donate = (body: object, ip = freshIp()) =>
   req("/api/donations", { method: "POST", ip, headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
 
+
+// The admin login is rate limited (5 per 15 minutes), so later tests reuse one session cookie.
+let adminCookieCache: string | null = null;
+async function adminCookie() {
+  if (!adminCookieCache) {
+    const login = await req("/api/admin/login", { method: "POST", ip: ADMIN_IP, headers: { "content-type": "application/json" }, body: JSON.stringify({ key: "test-admin-key" }) });
+    adminCookieCache = login.headers.get("set-cookie")!.split(";")[0];
+  }
+  return adminCookieCache;
+}
+
 beforeEach(async () => {
   const store = new MemoryStore();
   await store.ensureGenesis(10_000);
@@ -208,8 +219,7 @@ describe("donation receipts", () => {
     const pending = (await (await req(`/api/donations/${donation.id}/impact`)).json()) as { status: string };
     expect(pending.status).toBe("pending");
 
-    const login = await req("/api/admin/login", { method: "POST", ip: ADMIN_IP, headers: { "content-type": "application/json" }, body: JSON.stringify({ key: "test-admin-key" }) });
-    const cookie = login.headers.get("set-cookie")!.split(";")[0];
+    const cookie = await adminCookie();
     await req("/api/admin/council", { method: "POST", ip: ADMIN_IP, headers: { cookie } });
 
     const done = (await (await req(`/api/donations/${donation.id}/impact`)).json()) as {
@@ -239,11 +249,38 @@ describe("analytics", () => {
     await track({ vid: "robot-bbbb1", sid: "session-b1", events: [view], tz: "UTC", wd: true }, chrome);
     await track({ vid: "robot-cccc1", sid: "session-c1", events: [view], tz: "UTC" }, "Mozilla/5.0 (X11; Linux x86_64) HeadlessChrome/150.0.0.0");
 
-    const login = await req("/api/admin/login", { method: "POST", ip: ADMIN_IP, headers: { "content-type": "application/json" }, body: JSON.stringify({ key: "test-admin-key" }) });
-    const cookie = login.headers.get("set-cookie")!.split(";")[0];
+    const cookie = await adminCookie();
     const overview = (await (await req("/api/admin/overview", { ip: ADMIN_IP, headers: { cookie } })).json()) as { stats: { uniques: number; humanUniques?: number }[] };
     const today = overview.stats.at(-1)!;
     expect(today.uniques).toBe(3);
     expect(today.humanUniques).toBe(1);
+  });
+});
+
+describe("feedback", () => {
+  it("stores the kind of message and the page it came from", async () => {
+    const send = (body: object) => req("/api/contact", { method: "POST", ip: freshIp(), headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+    expect((await send({ kind: "suggestion", page: "/ask", message: "Please add soil restoration as a cause.", elapsed: 5000 })).status).toBe(201);
+    expect((await send({ kind: "nonsense", message: "This kind is not allowed here.", elapsed: 5000 })).status).toBe(400);
+
+    const cookie = await adminCookie();
+    const overview = (await (await req("/api/admin/overview", { ip: ADMIN_IP, headers: { cookie } })).json()) as { messages: { kind?: string; page?: string }[] };
+    expect(overview.messages[0]).toMatchObject({ kind: "suggestion", page: "/ask" });
+  });
+});
+
+describe("share images", () => {
+  it("renders a PNG for a council night and 404s for a night that never happened", async () => {
+    const { setLlm } = await import("../server/council");
+    setLlm(null);
+    const run = (await (await req("/api/admin/council", { method: "POST", ip: ADMIN_IP, headers: { cookie: await adminCookie() } })).json()) as { session: { day: string } };
+    const res = await req(`/og/council/${run.session.day}.png`);
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toBe("image/png");
+    const bytes = new Uint8Array(await res.arrayBuffer());
+    expect([...bytes.slice(1, 4)].map((b) => String.fromCharCode(b)).join("")).toBe("PNG");
+    expect((await req("/og/council/1999-01-01.png")).status).toBe(404);
+    const page = await (await req(`/council/${run.session.day}`)).text();
+    expect(page).toContain(`/og/council/${run.session.day}.png`);
   });
 });
