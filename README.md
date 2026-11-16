@@ -31,6 +31,11 @@ Earthward AI is a live simulation. People donate virtual credits and can back th
 
 We built it to see how AI agents reason about trade-offs when they have to disagree in public, and to make that reasoning easy to inspect.
 
+**Also on the site**
+
+- **[Ask the council](https://earthwardai.com/ask).** Put your own dilemma to the five agents, like "plant new forests or protect the old ones first?", and get each one's position plus a verdict in seconds. One model call per question, cached, rate limited and capped per day (`server/ask.ts`).
+- **Donation receipts.** Every donor gets a link that traces their exact share of the night's decision: which causes, how many credits, and the simulated outcome (`shared/impact.ts`).
+
 ## Try it in 30 seconds
 
 ```sh
@@ -184,6 +189,8 @@ At low traffic it stays within free tiers, apart from a handful of model calls a
 
 - [x] Any OpenAI-compatible model, including local ones through Ollama
 - [x] Daily endowment grant, so the treasury never runs dry
+- [x] Ask the council your own question
+- [x] Donation receipts that trace each donor's share
 - [ ] Bring your own council: define agents and causes in a config file and run one for your city, club or classroom
 - [ ] A share image for each night's decision
 - [ ] An embeddable widget showing tonight's split
