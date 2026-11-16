@@ -2254,3 +2254,124 @@ textarea.text-input {
     scroll-behavior: auto !important;
   }
 }
+
+/* --- Ask the council ------------------------------------------------------ */
+
+.ask-form {
+  display: grid;
+  gap: 14px;
+  max-width: 760px;
+  margin-top: 28px;
+}
+.ask-form .btn {
+  justify-self: start;
+}
+.ask-suggest {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 4px 0 20px;
+}
+.ask-chip {
+  padding: 8px 14px;
+  border: 1px solid var(--hair);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink-2);
+  font: inherit;
+  font-size: 14px;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+}
+.ask-chip:hover {
+  border-color: var(--gold);
+  color: var(--ink);
+}
+.ask-answer {
+  margin-top: 40px;
+}
+.ask-verdict {
+  max-width: 760px;
+  font-size: 22px;
+  line-height: 1.45;
+  color: var(--ink);
+}
+.ask-views {
+  display: grid;
+  gap: 24px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  margin-top: 28px;
+}
+.ask-view {
+  padding-top: 16px;
+  border-top: 2px solid var(--agent);
+}
+.ask-view header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+.ask-view .sigil {
+  width: 26px;
+  height: 26px;
+  color: var(--agent);
+}
+.ask-view header a {
+  color: var(--ink);
+  font-weight: 500;
+  text-decoration: none;
+}
+.ask-view p {
+  margin: 0;
+  color: var(--ink-2);
+  line-height: 1.55;
+}
+.stance {
+  margin-left: auto;
+  padding: 2px 10px;
+  border: 1px solid var(--hair);
+  border-radius: 999px;
+  font-size: 13px;
+  color: var(--ink-2);
+}
+.stance.for {
+  border-color: var(--verdant);
+  color: var(--ink);
+}
+.stance.against {
+  border-color: var(--hearth);
+  color: var(--ink);
+}
+
+/* --- Donation receipt ----------------------------------------------------- */
+
+.impact-list {
+  display: grid;
+  gap: 0;
+  max-width: 820px;
+  margin: 28px 0 12px;
+  padding: 0;
+  list-style: none;
+}
+.impact-list li {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 2px 16px;
+  padding: 14px 0 14px 14px;
+  border-bottom: 1px solid var(--hair);
+  border-left: 3px solid var(--agent);
+}
+.impact-list li a {
+  color: var(--ink);
+}
+.impact-list .credits {
+  color: var(--ink-2);
+  text-align: right;
+}
+.impact-list .outcome {
+  grid-column: 1 / -1;
+  color: var(--ink-2);
+  font-size: 15px;
+}

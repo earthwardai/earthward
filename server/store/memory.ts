@@ -130,6 +130,10 @@ export class MemoryStore implements Store {
     });
   }
 
+  async getDonation(id: string) {
+    return this.donations.find((d) => d.id === id) ?? null;
+  }
+
   async listDonations(limit: number) {
     return this.donations.slice(-limit).reverse();
   }
@@ -219,11 +223,19 @@ export class MemoryStore implements Store {
     addAll(s.referrers, inc.referrers);
     addAll(s.campaigns, inc.campaigns);
     if (inc.country) s.countries[inc.country] = (s.countries[inc.country] ?? 0) + 1;
+    if (inc.human) s.humanViews = (s.humanViews ?? 0) + inc.views;
     const vKey = `${day}:${vidHash}`;
     if (!this.visitors.has(vKey)) {
       this.visitors.add(vKey);
       s.uniques += 1;
+      if (inc.human) s.humanUniques = (s.humanUniques ?? 0) + 1;
     }
+    this.stats.set(day, s);
+  }
+
+  async bumpStats(day: string, inc: { asks?: number }) {
+    const s = this.stats.get(day) ?? emptyStats(day);
+    if (inc.asks) s.asks = (s.asks ?? 0) + inc.asks;
     this.stats.set(day, s);
   }
 

@@ -164,3 +164,86 @@ describe("admin area", () => {
     expect((await req("/internal/council", { method: "POST" })).status).toBe(404);
   });
 });
+
+describe("ask the council", () => {
+  it("answers with one view per agent, caches repeats, and refuses without a model", async () => {
+    const { setLlm } = await import("../server/council");
+    const { clearAskCache } = await import("../server/ask");
+    clearAskCache();
+    let calls = 0;
+    setLlm({
+      provider: "openai",
+      model: "fake",
+      async generateJson<T>(_s: string, prompt: string) {
+        calls++;
+        expect(prompt).toContain("<question>");
+        const views = ["verdant", "tide", "kindred", "hearth", "horizon"].map((agentId) => ({ agentId, stance: "mixed", say: `${agentId} has a view.` }));
+        return { views, verdict: "The council leans toward both, in that order." } as T;
+      },
+    });
+    const ask = (question: string, ip = freshIp()) =>
+      req("/api/ask", { method: "POST", ip, headers: { "content-type": "application/json" }, body: JSON.stringify({ question }) });
+
+    const res = await ask("Should we plant new trees or protect old forests first?");
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { views: { agentId: string }[]; verdict: string };
+    expect(body.views.map((v) => v.agentId)).toEqual(["verdant", "tide", "kindred", "hearth", "horizon"]);
+    expect(body.verdict).toContain("leans");
+    await ask("should we PLANT new trees, or protect old forests first");
+    expect(calls).toBe(1);
+
+    expect((await ask("hi")).status).toBe(400);
+    setLlm(null);
+    clearAskCache();
+    expect((await ask("Is clean water more urgent than coral reefs?")).status).toBe(503);
+  });
+});
+
+describe("donation receipts", () => {
+  it("shows a pending donation, then its exact share of the night's allocation", async () => {
+    const { setLlm } = await import("../server/council");
+    setLlm(null);
+    const res = await donate({ amount: 500, agentId: "hearth", elapsed: 3000 });
+    const { donation } = (await res.json()) as { donation: { id: string } };
+    const pending = (await (await req(`/api/donations/${donation.id}/impact`)).json()) as { status: string };
+    expect(pending.status).toBe("pending");
+
+    const login = await req("/api/admin/login", { method: "POST", ip: ADMIN_IP, headers: { "content-type": "application/json" }, body: JSON.stringify({ key: "test-admin-key" }) });
+    const cookie = login.headers.get("set-cookie")!.split(";")[0];
+    await req("/api/admin/council", { method: "POST", ip: ADMIN_IP, headers: { cookie } });
+
+    const done = (await (await req(`/api/donations/${donation.id}/impact`)).json()) as {
+      status: string;
+      share: number;
+      spent: number;
+      reserve: number;
+      items: { credits: number }[];
+      session: { pool: number };
+    };
+    expect(done.status).toBe("allocated");
+    expect(done.share).toBeCloseTo(500 / done.session.pool);
+    expect(done.spent + done.reserve).toBeCloseTo(500, 0);
+    const itemsTotal = done.items.reduce((s, i) => s + i.credits, 0);
+    expect(Math.abs(itemsTotal - done.spent)).toBeLessThan(2);
+    expect((await req("/api/donations/not-a-real-id/impact")).status).toBe(404);
+  });
+});
+
+describe("analytics", () => {
+  it("counts people and automated browsers separately", async () => {
+    const track = (body: object, ua: string, ip = freshIp()) =>
+      req("/api/t", { method: "POST", ip, headers: { "content-type": "text/plain", "user-agent": ua }, body: JSON.stringify(body) });
+    const view = { t: "view", p: "/", at: Date.now() };
+    const chrome = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Safari/537.36";
+    await track({ vid: "person-aaaa1", sid: "session-a1", events: [view], tz: "Asia/Kolkata" }, chrome);
+    await track({ vid: "robot-bbbb1", sid: "session-b1", events: [view], tz: "UTC", wd: true }, chrome);
+    await track({ vid: "robot-cccc1", sid: "session-c1", events: [view], tz: "UTC" }, "Mozilla/5.0 (X11; Linux x86_64) HeadlessChrome/150.0.0.0");
+
+    const login = await req("/api/admin/login", { method: "POST", ip: ADMIN_IP, headers: { "content-type": "application/json" }, body: JSON.stringify({ key: "test-admin-key" }) });
+    const cookie = login.headers.get("set-cookie")!.split(";")[0];
+    const overview = (await (await req("/api/admin/overview", { ip: ADMIN_IP, headers: { cookie } })).json()) as { stats: { uniques: number; humanUniques?: number }[] };
+    const today = overview.stats.at(-1)!;
+    expect(today.uniques).toBe(3);
+    expect(today.humanUniques).toBe(1);
+  });
+});

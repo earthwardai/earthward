@@ -108,6 +108,8 @@ export interface TrackBatch {
   screen?: { w: number; h: number };
   tz?: string;
   lang?: string;
+  /** navigator.webdriver: true for automated browsers, which are not counted as people. */
+  wd?: boolean;
 }
 
 /** Aggregates across recent council sessions, for the cause, agent and topic pages. */
@@ -118,3 +120,36 @@ export interface Insights {
   agents: Record<string, { avgWeight: number; endorsements: number; quotes: { day: string; quote: string }[]; preferences: { causeId: CauseId; avgShare: number }[] }>;
   countries: { code: string; donations: number }[];
 }
+
+export interface AskView {
+  agentId: AgentId;
+  stance: "for" | "against" | "mixed";
+  say: string;
+}
+
+/** One question put to the council, answered by all five agents. */
+export interface AskResponse {
+  question: string;
+  views: AskView[];
+  verdict: string;
+  model: string;
+}
+
+export interface ImpactItem {
+  causeId: string;
+  credits: number;
+  units: number;
+}
+
+/** Where one donation's credits went, for the donor's receipt page. */
+export type ImpactResponse =
+  | { status: "pending"; donation: PublicDonation; nextSessionAt: string }
+  | {
+      status: "allocated";
+      donation: PublicDonation;
+      session: { day: string; title: string; pool: number; spent: number };
+      share: number;
+      spent: number;
+      reserve: number;
+      items: ImpactItem[];
+    };

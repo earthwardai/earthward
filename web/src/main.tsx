@@ -10,6 +10,7 @@ import { DonateDialog, openDonate } from "./components/DonateDialog";
 import { ago, useLiveState, useNow, useTheme } from "./lib";
 import { AdminPage } from "./pages/Admin";
 import { AgentPage, CausePage, EarthAiPage, GlobalAiPage } from "./pages/Explore";
+import { AskPage, ImpactPage } from "./pages/Features";
 import { Home } from "./pages/Home";
 import { AboutPage, ContactPage, HowItWorksPage, LedgerPage, NotFound, PrivacyPage, SessionPage, TermsPage } from "./pages/Pages";
 import { startTracking, trackView } from "./track";
@@ -65,6 +66,9 @@ function Nav() {
         <a className="hide-sm" href="/#council">
           Council
         </a>
+        <Link className="hide-sm" href="/ask" aria-current={current("/ask")}>
+          Ask
+        </Link>
         <Link className="hide-sm" href="/ledger" aria-current={current("/ledger")}>
           Ledger
         </Link>
@@ -208,6 +212,8 @@ function App() {
         <Route path="/global-ai-council" component={GlobalAiPage} />
         <Route path="/agents/:id">{(p) => <AgentPage id={p.id} />}</Route>
         <Route path="/causes/:id">{(p) => <CausePage id={p.id} />}</Route>
+        <Route path="/ask" component={AskPage} />
+        <Route path="/impact/:id">{(p) => <ImpactPage id={p.id} />}</Route>
         <Route path="/admin" component={AdminPage} />
         <Route component={NotFound} />
       </Switch>

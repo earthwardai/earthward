@@ -10,8 +10,10 @@ import { z } from "zod";
 import { AGENTS, AGENT_IDS } from "../shared/agents";
 import { CAUSES } from "../shared/causes";
 import { dayKey, nextSessionAt, sessionDay } from "../shared/council";
-import type { PublicDonation, StateResponse, TrackBatch } from "../shared/types";
+import { computeImpact } from "../shared/impact";
+import type { ImpactResponse, PublicDonation, StateResponse, TrackBatch } from "../shared/types";
 import { config } from "./config";
+import { AskUnavailableError, askCouncil } from "./ask";
 import { runCouncil } from "./council";
 import { centroidOf, countryOf } from "./geo";
 import { clearInsights, getInsights } from "./insights";
@@ -88,7 +90,10 @@ const TrackSchema = z.object({
   screen: z.object({ w: z.number().int().min(0).max(20000), h: z.number().int().min(0).max(20000) }).optional(),
   tz: z.string().max(64).optional(),
   lang: z.string().max(35).optional(),
+  wd: z.boolean().optional(),
 });
+
+const BOT_UA = /HeadlessChrome|bot\b|bot\/|crawl|spider|slurp|preview|lighthouse|python|curl|wget|go-http|okhttp|axios|node-fetch|phantom|puppeteer|playwright/i;
 
 const oauth = new OAuth2Client();
 
@@ -98,7 +103,7 @@ export function createApp(store: Store) {
 
   // Star count for the Star on GitHub button. Unauthenticated API calls are limited to 60 an hour,
   // so the count is refreshed at most every 15 minutes and a failure keeps the last known value.
-  let stars: { at: number; count: number | null } = { at: 0, count: null };
+  let stars: { at: number; count: number | null; forks?: number; issues?: number } = { at: 0, count: null };
   const githubStars = async (): Promise<number | null> => {
     if (!config.githubRepo || process.env.VITEST) return stars.count;
     if (Date.now() - stars.at < 15 * 60_000) return stars.count;
@@ -108,7 +113,10 @@ export function createApp(store: Store) {
         headers: { accept: "application/vnd.github+json", "user-agent": "earthwardai.com" },
         signal: AbortSignal.timeout(3000),
       });
-      if (res.ok) stars = { at: Date.now(), count: Number(((await res.json()) as { stargazers_count?: number }).stargazers_count ?? 0) };
+      if (res.ok) {
+        const r = (await res.json()) as { stargazers_count?: number; forks_count?: number; open_issues_count?: number };
+        stars = { at: Date.now(), count: Number(r.stargazers_count ?? 0), forks: r.forks_count, issues: r.open_issues_count };
+      }
     } catch {
       /* keep the last known count */
     }
@@ -324,6 +332,54 @@ export function createApp(store: Store) {
     return c.json({ sent: true }, 201);
   });
 
+  // --- Ask the council -------------------------------------------------------
+
+  const AskSchema = z.object({ question: z.string().trim().min(8).max(300) });
+
+  app.post("/api/ask", async (c) => {
+    const ip = clientIp(c);
+    if (!limiters.ask.take(hashIp(ip))) {
+      security(c, "rate_limited", "ask");
+      return c.json({ error: "You've asked the council a few questions already. Try again in an hour." }, 429);
+    }
+    const parsed = AskSchema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) return c.json({ error: "Ask a question between 8 and 300 characters." }, 400);
+    const question = stripLinks(cleanText(parsed.data.question, 300));
+    if (!question || question.length < 8) return c.json({ error: "Ask a question between 8 and 300 characters." }, 400);
+    if (!dailyCaps.ask.take()) return c.json({ error: "The council has answered all the questions it can for today. Come back tomorrow." }, 503);
+    try {
+      const answer = await askCouncil(question);
+      store.bumpStats(dayKey(new Date(), config.timeZone), { asks: 1 }).catch(() => undefined);
+      return c.json(answer);
+    } catch (err) {
+      if (err instanceof AskUnavailableError) return c.json({ error: "The council isn't taking questions right now." }, 503);
+      console.error("ask failed", err);
+      return c.json({ error: "The council couldn't agree on an answer. Try asking again in a moment." }, 502);
+    }
+  });
+
+  // --- A donor's receipt: where their credits went ---------------------------
+
+  app.get("/api/donations/:id/impact", async (c) => {
+    const id = c.req.param("id");
+    if (!/^[A-Za-z0-9-]{8,64}$/.test(id)) return c.json({ error: "Not found" }, 404);
+    const donation = await store.getDonation(id);
+    if (!donation) return c.json({ error: "Not found" }, 404);
+    const session = await store.getSession(donation.day);
+    c.header("Cache-Control", "public, max-age=60");
+    if (!session) {
+      // Not decided yet: the donation is counted at the next session.
+      return c.json({ status: "pending", donation: toPublic(donation), nextSessionAt: nextSessionAt(new Date(), config.timeZone).toISOString() } satisfies ImpactResponse);
+    }
+    const impact = computeImpact(donation.amount, session);
+    return c.json({
+      status: "allocated",
+      donation: toPublic(donation),
+      session: { day: session.day, title: session.title, pool: session.pool, spent: session.spent },
+      ...impact,
+    } satisfies ImpactResponse);
+  });
+
   app.get("/sitemap.xml", async (c) => {
     const sessions = await store.listSessions(60);
     const today = new Date().toISOString().slice(0, 10);
@@ -332,6 +388,7 @@ export function createApp(store: Store) {
       ["/", latest],
       ["/earth-ai", latest],
       ["/global-ai-council", latest],
+      ["/ask", today],
       ["/how-it-works", today],
       ["/ledger", latest],
       ["/about", today],
@@ -383,7 +440,9 @@ export function createApp(store: Store) {
     if (!dailyCaps.analytics.take()) return c.body(null, 204);
     const now = new Date();
     const host = new URL(c.req.url).host;
-    const inc = { views: 0, clicks: 0, paths: {} as Record<string, number>, targets: {} as Record<string, number>, referrers: {} as Record<string, number>, campaigns: {} as Record<string, number>, country: countryOf(ip) };
+    const ua = c.req.header("user-agent") ?? "";
+    const human = !batch.wd && !BOT_UA.test(ua) && batch.tz !== "Etc/Unknown";
+    const inc = { human, views: 0, clicks: 0, paths: {} as Record<string, number>, targets: {} as Record<string, number>, referrers: {} as Record<string, number>, campaigns: {} as Record<string, number>, country: countryOf(ip) };
     for (const e of batch.events) {
       if (e.t === "view") {
         inc.views += 1;
@@ -412,7 +471,7 @@ export function createApp(store: Store) {
         ip,
         ipHash,
         country: inc.country,
-        ua: (c.req.header("user-agent") ?? "").slice(0, 300),
+        ua: ua.slice(0, 300),
         vid: batch.vid,
         sid: batch.sid,
         events: batch.events,
@@ -493,14 +552,16 @@ export function createApp(store: Store) {
     const days = Array.from({ length: 14 }, (_, i) => dayKey(new Date(now - i * 86_400_000), config.timeZone)).reverse();
     const [stats, visits, donations, securityEvents, treasury, sessions, messages] = await Promise.all([
       store.getStats(days),
-      store.listAnalytics(150),
+      store.listAnalytics(300),
       store.listDonations(60),
       store.listSecurity(100),
       store.getTreasury(),
       store.listSessions(7),
       store.listMessages(50),
     ]);
-    return c.json({ stats, visits, donations, security: securityEvents, treasury, sessions, messages, timeZone: config.timeZone });
+    await githubStars();
+    const github = config.githubRepo ? { repo: config.githubRepo, stars: stars.count, forks: stars.forks ?? null, issues: stars.issues ?? null } : null;
+    return c.json({ stats, visits, donations, security: securityEvents, treasury, sessions, messages, github, timeZone: config.timeZone });
   });
 
   app.post("/api/admin/council", async (c) => {

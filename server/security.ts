@@ -92,6 +92,8 @@ export const dailyCaps = {
   donations: new DailyCap(5_000),
   contact: new DailyCap(200),
   securityLog: new DailyCap(2_000),
+  /** Each question is one model call, so this also bounds the model bill. */
+  ask: new DailyCap(300),
 };
 
 export const limiters = {
@@ -101,6 +103,7 @@ export const limiters = {
   track: new RateLimiter(60, 60_000),
   adminLogin: new RateLimiter(5, 15 * 60_000),
   contact: new RateLimiter(3, 60 * 60_000),
+  ask: new RateLimiter(6, 60 * 60_000),
 };
 
 // --- Response headers -------------------------------------------------------

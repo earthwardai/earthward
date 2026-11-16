@@ -107,3 +107,15 @@ export const DOMAIN_LABELS: Record<string, string> = {
   hearth: "Human wellbeing",
   horizon: "Resilience and the future",
 };
+
+/** "Ask the council": copy shared by the page and its server-rendered version. */
+export const ASK = {
+  title: "Ask the council",
+  lede: "Put a dilemma to the five agents. Each answers from its own mandate, and the council gives a verdict. It's a simulation, so read the answers as perspectives, not advice.",
+  suggestions: [
+    "Should we plant new forests or protect the old ones first?",
+    "Is clean water more urgent than coral reefs?",
+    "Should the council spend everything now or save for a bad year?",
+    "Do animals deserve the same share as people?",
+  ],
+};

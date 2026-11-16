@@ -114,8 +114,8 @@ export function DonateDialog() {
               <button type="button" className="btn" onClick={() => setReceipt(null)} data-track="donate-again">
                 Donate again
               </button>
-              <Link className="btn ghost" href="/ledger" onClick={close}>
-                View the ledger
+              <Link className="btn ghost" href={`/impact/${receipt.donation.id}`} onClick={close} data-track="donate-impact">
+                See where they go
               </Link>
             </div>
           </div>

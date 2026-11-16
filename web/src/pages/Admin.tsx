@@ -15,6 +15,9 @@ interface DayStats {
   countries: Record<string, number>;
   referrers: Record<string, number>;
   campaigns?: Record<string, number>;
+  humanViews?: number;
+  humanUniques?: number;
+  asks?: number;
 }
 
 interface Visit {
@@ -37,8 +40,13 @@ interface Overview {
   messages: { at: string; name: string | null; email: string | null; message: string; ip: string; country: string | null }[];
   treasury: Treasury;
   sessions: Session[];
+  github: { repo: string; stars: number | null; forks: number | null; issues: number | null } | null;
   timeZone: string;
 }
+
+/** People rather than bots. Days recorded before the split existed fall back to the total. */
+const humans = (d: DayStats | undefined) => (d ? (d.humanUniques ?? d.uniques) : 0);
+const pctOf = (a: number, b: number) => (b > 0 ? `${((a / b) * 100).toLocaleString("en-US", { maximumFractionDigits: 1 })}%` : "–");
 
 const time = (iso: string) => new Date(iso).toLocaleString("en-GB", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
 
@@ -90,7 +98,9 @@ function DailyVisitors({ stats }: { stats: DayStats[] }) {
     <div>
       <h3 style={{ fontSize: 20 }}>Unique visitors per day</h3>
       <p className="muted num" style={{ margin: "4px 0 0" }} role="status">
-        {shown ? `${shown.day}: ${credits(shown.uniques)} visitors, ${credits(shown.views)} page views, ${credits(shown.clicks)} clicks, ${credits(shown.donations)} donations` : ""}
+        {shown
+          ? `${shown.day}: ${credits(humans(shown))} people (${credits(shown.uniques)} including bots), ${credits(shown.views)} page views, ${credits(shown.clicks)} clicks, ${credits(shown.donations)} donations, ${credits(shown.asks ?? 0)} questions`
+          : ""}
       </p>
       <div className="bars" onMouseLeave={() => setHover(null)}>
         {stats.map((s, i) => (
@@ -198,6 +208,16 @@ export function AdminPage() {
   const today = data.stats.at(-1);
   const week = data.stats.slice(-7);
   const sum = (k: keyof Pick<DayStats, "uniques" | "views" | "clicks" | "donations">) => week.reduce((s, d) => s + d[k], 0);
+  const people7 = week.reduce((n, d) => n + humans(d), 0);
+  const cutoff = Date.now() - 30 * 60_000;
+  const live = new Set(data.visits.filter((v) => new Date(v.at).getTime() > cutoff).map((v) => v.vid)).size;
+  const devices: [string, number][] = (() => {
+    const seen = new Map<string, string>();
+    for (const v of data.visits) if (v.screen && !seen.has(v.vid)) seen.set(v.vid, v.screen.w < 768 ? "Phone" : v.screen.w < 1100 ? "Tablet or small laptop" : "Desktop");
+    const counts: Record<string, number> = {};
+    for (const d of seen.values()) counts[d] = (counts[d] ?? 0) + 1;
+    return Object.entries(counts).sort((a, b) => b[1] - a[1]);
+  })();
 
   return (
     <main id="main" className="page admin">
@@ -219,12 +239,27 @@ export function AdminPage() {
       </div>
 
       <dl className="kpis num">
-        <div className="kpi"><dt>Visitors today</dt><dd>{credits(today?.uniques ?? 0)}</dd></div>
-        <div className="kpi"><dt>Page views today</dt><dd>{credits(today?.views ?? 0)}</dd></div>
-        <div className="kpi"><dt>Clicks today</dt><dd>{credits(today?.clicks ?? 0)}</dd></div>
+        <div className="kpi"><dt>Live now (30 min)</dt><dd>{credits(live)}</dd></div>
+        <div className="kpi"><dt>People today</dt><dd>{credits(humans(today))}</dd></div>
+        <div className="kpi"><dt>Bots today</dt><dd>{credits(Math.max(0, (today?.uniques ?? 0) - humans(today)))}</dd></div>
+        <div className="kpi"><dt>Questions asked today</dt><dd>{credits(today?.asks ?? 0)}</dd></div>
         <div className="kpi"><dt>Donations today</dt><dd>{credits(today?.donations ?? 0)}</dd></div>
-        <div className="kpi"><dt>Visitors, 7 days</dt><dd>{credits(sum("uniques"))}</dd></div>
+        <div className="kpi"><dt>People, 7 days</dt><dd>{credits(people7)}</dd></div>
+        <div className="kpi"><dt>Donation rate, 7 days</dt><dd>{pctOf(sum("donations"), people7)}</dd></div>
+        <div className="kpi"><dt>Questions, 7 days</dt><dd>{credits(week.reduce((n, d) => n + (d.asks ?? 0), 0))}</dd></div>
+        <div className="kpi"><dt>Page views today</dt><dd>{credits(today?.views ?? 0)}</dd></div>
         <div className="kpi"><dt>Treasury</dt><dd>{credits(data.treasury.balance)}</dd></div>
+        {data.github ? (
+          <div className="kpi">
+            <dt>GitHub stars</dt>
+            <dd>
+              <a href={`https://github.com/${data.github.repo}`} target="_blank" rel="noopener">
+                {data.github.stars === null ? "–" : credits(data.github.stars)}
+              </a>
+            </dd>
+          </div>
+        ) : null}
+        {data.github ? <div className="kpi"><dt>Forks, open issues</dt><dd>{data.github.forks ?? "–"}, {data.github.issues ?? "–"}</dd></div> : null}
       </dl>
 
       <div className="panel">
@@ -237,6 +272,7 @@ export function AdminPage() {
         <HBars label="Countries, 14 days" rows={sumMaps(data.stats, "countries")} format={(k) => countryName(k) ?? k} />
         <HBars label="Referrers, 14 days" rows={sumMaps(data.stats, "referrers")} format={(k) => k.replace(/_/g, ".")} />
         <HBars label="Campaigns (utm source and campaign), 14 days" rows={sumMaps(data.stats, "campaigns")} format={(k) => k.replace(/_/, ": ")} />
+        <HBars label="Devices, recent visitors" rows={devices} />
       </div>
 
       <section className="panel" style={{ width: "auto", padding: 0 }}>

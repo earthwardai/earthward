@@ -37,6 +37,7 @@ export function flush(useBeacon = false) {
     screen: { w: window.innerWidth, h: window.innerHeight },
     tz: Intl.DateTimeFormat().resolvedOptions().timeZone,
     lang: navigator.language,
+    wd: navigator.webdriver === true,
   });
   if (useBeacon && navigator.sendBeacon) {
     navigator.sendBeacon("/api/t", new Blob([body], { type: "text/plain" }));

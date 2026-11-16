@@ -1,6 +1,6 @@
 import { AGENTS, agentById } from "../shared/agents";
 import { CAUSES, causeById } from "../shared/causes";
-import { ABOUT, ALT_NAMES, DEFINITION, DOMAIN_LABELS, EARTH_AI, GLOBAL_AI, HEADLINE, SITE_NAME, SUMMARY, faq } from "../shared/content";
+import { ABOUT, ALT_NAMES, ASK, DEFINITION, DOMAIN_LABELS, EARTH_AI, GLOBAL_AI, HEADLINE, SITE_NAME, SUMMARY, faq } from "../shared/content";
 import { RULES } from "../shared/council";
 import type { Session } from "../shared/types";
 import { config } from "./config";
@@ -31,6 +31,8 @@ export interface RenderedPage {
   body: string;
   jsonLd: object[];
   ogType?: "website" | "article";
+  /** Set to keep a page out of search results, for example a donor's private receipt. */
+  noindex?: boolean;
 }
 
 const ORG = () => ({
@@ -337,6 +339,25 @@ export async function renderRoute(store: Store, path: string): Promise<RenderedP
   if (ca) return causePage(store, ca[1]);
   const m = path.match(/^\/council\/([^/]+)$/);
   if (m) return sessionPage(store, m[1]);
+  if (path === "/ask")
+    return {
+      status: 200,
+      path,
+      title: `${ASK.title}: put a dilemma to five AI agents | ${SITE_NAME}`,
+      description: ASK.lede,
+      body: `<main class="page prose"><h1>${esc(ASK.title)}</h1><p class="lede">${esc(ASK.lede)}</p><h2>Questions people ask</h2><ul>${ASK.suggestions.map((q) => `<li>${esc(q)}</li>`).join("")}</ul><p>Each of the five agents (${AGENTS.map((a) => esc(a.name)).join(", ")}) answers from its own mandate, then the council gives a verdict.</p></main>`,
+      jsonLd: [ORG(), crumbs(["Ask the council", "/ask"]), { "@type": "WebApplication", name: `${ASK.title} | ${SITE_NAME}`, applicationCategory: "EducationalApplication", operatingSystem: "Web", url: `${config.siteUrl}/ask`, offers: { "@type": "Offer", price: "0", priceCurrency: "USD" } }],
+    };
+  if (/^\/impact\/[A-Za-z0-9-]{8,64}$/.test(path))
+    return {
+      status: 200,
+      path,
+      title: `Where my credits went | ${SITE_NAME}`,
+      description: "A donor's share of one night's decision by the Earthward AI council: which causes it funded and the simulated outcomes.",
+      body: `<main class="page prose"><h1>Where my credits went</h1><p class="lede">A donor's share of one night's decision by the Earthward AI council.</p><p><a href="/">See the live council</a></p></main>`,
+      jsonLd: [ORG()],
+      noindex: true,
+    };
   const s = simple[path];
   if (s)
     return {
@@ -364,6 +385,7 @@ export function injectPage(indexHtml: string, page: RenderedPage): string {
     .replace(/<meta property="og:title" content="[^"]*" \/>/, `<meta property="og:title" content="${esc(page.title)}" />\n    <meta property="og:url" content="${esc(url)}" />`)
     .replace(/<meta property="og:description" content="[^"]*" \/>/, `<meta property="og:description" content="${esc(page.description)}" />`)
     .replace(/<script type="application\/ld\+json">[\s\S]*?<\/script>/, ld)
+    .replace("</head>", page.noindex ? `  <meta name="robots" content="noindex" />\n  </head>` : "</head>")
     .replace('<div id="root"></div>', `<div id="root"><div class="ssr">${page.body}</div></div>`);
 }
 

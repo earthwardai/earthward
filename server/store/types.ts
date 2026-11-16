@@ -52,6 +52,11 @@ export interface DayStats {
   countries: Record<string, number>;
   referrers: Record<string, number>;
   campaigns: Record<string, number>;
+  /** Views and unique visitors that look like people rather than bots. */
+  humanViews?: number;
+  humanUniques?: number;
+  /** Questions put to the council. */
+  asks?: number;
 }
 
 export interface StatsIncrement {
@@ -62,6 +67,8 @@ export interface StatsIncrement {
   country: string | null;
   referrers: Record<string, number>;
   campaigns: Record<string, number>;
+  /** False for batches that look automated. */
+  human: boolean;
 }
 
 export interface SecurityEvent {
@@ -96,6 +103,7 @@ export interface Store {
   /** Records a donation, its ledger entry and the daily totals in one atomic step. */
   donate(input: NewDonation, dailyLimit: number): Promise<{ donation: DonationRecord; entry: LedgerEntry }>;
   listDonations(limit: number): Promise<DonationRecord[]>;
+  getDonation(id: string): Promise<DonationRecord | null>;
   getDaySummary(day: string): Promise<DaySummary>;
   dayMessages(day: string, limit: number): Promise<{ name: string | null; message: string; agentId: AgentId | null }[]>;
 
@@ -113,6 +121,8 @@ export interface Store {
   recordAnalytics(batch: AnalyticsBatch, inc: StatsIncrement, day: string, vidHash: string): Promise<void>;
   listAnalytics(limit: number): Promise<AnalyticsBatch[]>;
   getStats(days: string[]): Promise<DayStats[]>;
+  /** Adds to simple daily counters such as questions asked. */
+  bumpStats(day: string, inc: { asks?: number }): Promise<void>;
 
   addMessage(m: ContactMessage): Promise<void>;
   listMessages(limit: number): Promise<ContactMessage[]>;

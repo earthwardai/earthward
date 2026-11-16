@@ -126,6 +126,11 @@ export class FirestoreStore implements Store {
     });
   }
 
+  async getDonation(id: string) {
+    const snap = await this.db.collection("donations").doc(id).get();
+    return snap.exists ? (snap.data() as DonationRecord) : null;
+  }
+
   async listDonations(limit: number) {
     const snap = await this.db.collection("donations").orderBy("seq", "desc").limit(limit).get();
     return snap.docs.map((d) => d.data() as DonationRecord);
@@ -241,6 +246,7 @@ export class FirestoreStore implements Store {
         targets: nested(inc.targets),
         referrers: nested(inc.referrers),
         campaigns: nested(inc.campaigns),
+        ...(inc.human ? { humanViews: FieldValue.increment(inc.views) } : {}),
         ...(inc.country ? { countries: { [safeKey(inc.country)]: FieldValue.increment(1) } } : {}),
       },
       { merge: true },
@@ -249,10 +255,15 @@ export class FirestoreStore implements Store {
     // Counting unique visitors needs a create-if-absent, which a batch cannot express.
     try {
       await visitorRef.create({ at: batch.at, expireAt: this.expireAt() });
-      await statsRef.set({ uniques: FieldValue.increment(1) }, { merge: true });
+      await statsRef.set({ uniques: FieldValue.increment(1), ...(inc.human ? { humanUniques: FieldValue.increment(1) } : {}) }, { merge: true });
     } catch (err) {
       if ((err as { code?: number }).code !== 6) throw err; // 6 = ALREADY_EXISTS
     }
+  }
+
+  async bumpStats(day: string, inc: { asks?: number }) {
+    const fields = Object.fromEntries(Object.entries(inc).filter(([, v]) => v).map(([k, v]) => [k, FieldValue.increment(v as number)]));
+    if (Object.keys(fields).length) await this.db.collection("stats").doc(day).set({ day, ...fields }, { merge: true });
   }
 
   async listAnalytics(limit: number) {
