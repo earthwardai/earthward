@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { makeEntry, type LedgerEntry } from "../../shared/ledger";
-import type { Nomination, NominationRound, Session, Treasury } from "../../shared/types";
+import type { ArenaResult, GroupPledge, GroupSession, Nomination, NominationRound, Session, Treasury } from "../../shared/types";
 import {
   QuotaExceededError,
   SessionExistsError,
@@ -15,6 +15,12 @@ import {
   type SecurityEvent,
   type StatsIncrement,
   type Store,
+  type ApiKeyRecord,
+  type GroupRecord,
+  type PushSubRecord,
+  type SubscriberRecord,
+  type PledgeResult,
+  GROUP_PLEDGE_LIMIT,
 } from "./types";
 
 const emptyStats = (day: string): DayStats => ({
@@ -58,6 +64,12 @@ export class MemoryStore implements Store {
   private nominations = new Map<string, Nomination & { email: string | null; ipHash: string }>();
   private nominationVotes = new Set<string>();
   private rounds: NominationRound[] = [];
+  private arena = new Map<string, ArenaResult>();
+  private apiKeys = new Map<string, ApiKeyRecord>();
+  private apiUse = new Map<string, number>();
+  private groups = new Map<string, GroupRecord>();
+  private pushSubs = new Map<string, PushSubRecord>();
+  private subscribers = new Map<string, SubscriberRecord>();
   private analytics: AnalyticsBatch[] = [];
   private stats = new Map<string, DayStats>();
   private visitors = new Set<string>();
@@ -377,5 +389,111 @@ export class MemoryStore implements Store {
 
   async latestRound() {
     return [...this.rounds].sort((a, b) => b.month.localeCompare(a.month))[0] ?? null;
+  }
+
+  async saveArena(result: ArenaResult) {
+    this.arena.set(result.day, result);
+  }
+
+  async getArena(day: string) {
+    return this.arena.get(day) ?? null;
+  }
+
+  async createApiKey(key: ApiKeyRecord) {
+    this.apiKeys.set(key.hash, key);
+  }
+
+  async getApiKey(hash: string) {
+    return this.apiKeys.get(hash) ?? null;
+  }
+
+  async useApiKey(hash: string, day: string, limit: number) {
+    const k = `${hash}:${day}`;
+    const n = this.apiUse.get(k) ?? 0;
+    if (n >= limit) return false;
+    this.apiUse.set(k, n + 1);
+    return true;
+  }
+
+  async countApiKeys() {
+    return this.apiKeys.size;
+  }
+
+  async createGroup(group: GroupRecord) {
+    if (this.groups.has(group.id)) throw new Error("group exists");
+    this.groups.set(group.id, structuredClone(group));
+  }
+
+  async getGroup(id: string) {
+    const g = this.groups.get(id);
+    return g ? structuredClone(g) : null;
+  }
+
+  async addGroupPledge(id: string, pledge: GroupPledge, vidHash: string): Promise<PledgeResult> {
+    const g = this.groups.get(id);
+    if (!g) return "missing";
+    if (g.pledgeVids.includes(vidHash)) return "duplicate";
+    if (g.pledges.length >= GROUP_PLEDGE_LIMIT) return "full";
+    g.pledges.push(pledge);
+    g.pledgeVids.push(vidHash);
+    return "ok";
+  }
+
+  async saveGroupSession(id: string, session: GroupSession, expected: number) {
+    const g = this.groups.get(id);
+    if (!g || (g.sessions.at(-1)?.n ?? 0) !== expected) return false;
+    g.sessions = [...g.sessions, session].slice(-10);
+    g.pledges = [];
+    g.pledgeVids = [];
+    g.lastConvenedAt = session.at;
+    return true;
+  }
+
+  async countGroups() {
+    return this.groups.size;
+  }
+
+  async savePushSub(sub: PushSubRecord) {
+    this.pushSubs.set(sub.id, sub);
+  }
+
+  async deletePushSub(id: string) {
+    this.pushSubs.delete(id);
+  }
+
+  async listPushSubs(limit: number) {
+    return [...this.pushSubs.values()].slice(0, limit);
+  }
+
+  async countPushSubs() {
+    return this.pushSubs.size;
+  }
+
+  async upsertSubscriber(sub: SubscriberRecord) {
+    const existing = this.subscribers.get(sub.id);
+    if (existing?.status === "active") return existing;
+    this.subscribers.set(sub.id, sub);
+    return sub;
+  }
+
+  async findSubscriber(token: string) {
+    return [...this.subscribers.values()].find((s) => s.token === token) ?? null;
+  }
+
+  async activateSubscriber(id: string) {
+    const s = this.subscribers.get(id);
+    if (s) this.subscribers.set(id, { ...s, status: "active", confirmedAt: new Date().toISOString() });
+  }
+
+  async deleteSubscriber(id: string) {
+    this.subscribers.delete(id);
+  }
+
+  async listActiveSubscribers(limit: number) {
+    return [...this.subscribers.values()].filter((s) => s.status === "active").slice(0, limit);
+  }
+
+  async countSubscribers() {
+    return [...this.subscribers.values()].filter((s) => s.status === "active").length;
   }
 }

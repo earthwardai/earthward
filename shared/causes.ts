@@ -1,4 +1,5 @@
 import type { AgentId } from "./agents";
+import { worldScoped } from "./world";
 
 export type CauseId =
   | "reforest"
@@ -28,7 +29,7 @@ export interface Cause {
   summary: string;
 }
 
-export const CAUSES: Cause[] = [
+const EARTHWARD_CAUSES: Cause[] = [
   {
     id: "reforest",
     name: "Tropical reforestation",
@@ -161,6 +162,12 @@ export const CAUSES: Cause[] = [
   },
 ];
 
-export const CAUSE_IDS = CAUSES.map((c) => c.id) as CauseId[];
+/** The council's causes: Earthward's thirteen, or a group council's own while it deliberates. */
+export const CAUSES: Cause[] = worldScoped(EARTHWARD_CAUSES, (w) => w.causes);
+
+export const CAUSE_IDS: CauseId[] = worldScoped(
+  EARTHWARD_CAUSES.map((c) => c.id),
+  (w) => w.causeIds,
+);
 
 export const causeById = (id: string): Cause | undefined => CAUSES.find((c) => c.id === id);

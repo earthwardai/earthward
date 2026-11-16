@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "wouter";
+import { StayInTouch } from "../components/StayInTouch";
 import { CAUSES, causeById } from "../../../shared/causes";
 import type { LeaderRow, PredictionMe } from "../../../shared/types";
 import { ApiError, api, countdown, credits, longDate, useLiveState, useNow, usePageMeta } from "../lib";
@@ -195,6 +196,7 @@ export function PredictPage() {
         )}
         <p className="hint">Names are optional and chosen by players. Predictions are tied to your browser, not an account, and nothing personal is stored.</p>
       </section>
+      <StayInTouch title="Find out if you were right" />
     </main>
   );
 }

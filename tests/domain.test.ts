@@ -182,3 +182,28 @@ describe("nightly auto-post", () => {
     expect(calls).toEqual(["POST https://mastodon.example/api/v1/statuses"]);
   });
 });
+
+describe("model arena", () => {
+  it("runs the same night through other models without touching the ledger", async () => {
+    const { MemoryStore } = await import("../server/store/memory");
+    const { runCouncil, setLlm } = await import("../server/council");
+    const { runArena } = await import("../server/arena");
+    const store = new MemoryStore();
+    await store.ensureGenesis(10_000);
+    setLlm(null);
+    const r = await runCouncil(store, "2026-11-20");
+    if (r.status !== "created") throw new Error(r.status);
+    const before = (await store.getTreasury()).balance;
+
+    const echo = { provider: "openai" as const, model: "echo-1", generateJson: async <T,>() => ({ allocations: [{ causeId: "seeds", percent: 100 }], reasoning: "Seeds.", quote: "Seeds first." }) as T };
+    const broken = { provider: "openai" as const, model: "broken-1", generateJson: async <T,>(): Promise<T> => { throw new Error("down"); } };
+    const arena = await runArena(store, r.session, true, [{ label: "echo-1", llm: echo }, { label: "broken-1", llm: broken }, { label: "No model", llm: null }]);
+
+    expect(arena!.entries.map((e) => e.label)).toEqual(["echo-1", "No model"]);
+    expect(arena!.entries[0].quotes[0].quote).toBe("Seeds first.");
+    expect(arena!.entries[0].agreement).toBeLessThan(arena!.entries[1].agreement);
+    expect(arena!.entries[1].agreement).toBeCloseTo(1, 2);
+    expect((await store.getTreasury()).balance).toBe(before);
+    expect((await store.getArena("2026-11-20"))?.entries).toHaveLength(2);
+  });
+});

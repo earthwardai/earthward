@@ -99,6 +99,12 @@ export const dailyCaps = {
   predictions: new DailyCap(10_000),
   argue: new DailyCap(10_000),
   nominations: new DailyCap(200),
+  apiKeys: new DailyCap(100),
+  groups: new DailyCap(300),
+  groupPledges: new DailyCap(5_000),
+  /** Each session is six model calls. */
+  groupConvenes: new DailyCap(100),
+  notify: new DailyCap(2_000),
 };
 
 export const limiters = {
@@ -112,6 +118,11 @@ export const limiters = {
   predict: new RateLimiter(20, 60 * 60_000),
   argue: new RateLimiter(30, 60 * 60_000),
   nominate: new RateLimiter(3, 60 * 60_000),
+  apiKey: new RateLimiter(3, 24 * 60 * 60_000),
+  groupCreate: new RateLimiter(5, 60 * 60_000),
+  groupPledge: new RateLimiter(30, 60 * 60_000),
+  groupConvene: new RateLimiter(10, 60 * 60_000),
+  notify: new RateLimiter(10, 60 * 60_000),
 };
 
 // --- Response headers -------------------------------------------------------

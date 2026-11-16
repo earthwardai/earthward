@@ -3,6 +3,8 @@ import { CAUSES, causeById } from "../shared/causes";
 import { ABOUT, ALT_NAMES, ASK, DEFINITION, DOMAIN_LABELS, EARTH_AI, GLOBAL_AI, HEADLINE, SITE_NAME, SUMMARY, faq } from "../shared/content";
 import { RULES } from "../shared/council";
 import type { Session } from "../shared/types";
+import { LOCALES, type Locale } from "../shared/locales";
+import { TEMPLATES } from "../shared/templates";
 import { config } from "./config";
 import { getInsights } from "./insights";
 import type { Store } from "./store/types";
@@ -35,7 +37,17 @@ export interface RenderedPage {
   noindex?: boolean;
   /** A page-specific share image; the brand image is used otherwise. */
   ogImage?: string;
+  /** The page's language when it isn't English. */
+  lang?: string;
 }
+
+/** The home page and its Spanish and Hindi versions point at each other for search engines. */
+const ALTERNATES: [string, string][] = [
+  ["en", "/"],
+  ["es", "/es"],
+  ["hi", "/hi"],
+  ["x-default", "/"],
+];
 
 const ORG = () => ({
   "@type": "Organization",
@@ -361,6 +373,60 @@ export async function renderRoute(store: Store, path: string): Promise<RenderedP
       body: `<main class="page prose"><h1>Nominate a cause</h1><p class="lede">Propose a cause for the council. Approved nominations join a public shortlist, and once a month the five agents debate the most supported and recommend one.</p></main>`,
       jsonLd: [ORG(), crumbs(["Nominate a cause", "/nominate"])],
     };
+  if (path === "/councils")
+    return {
+      status: 200,
+      path,
+      title: `Run an AI council for your class, team or neighbourhood | ${SITE_NAME}`,
+      description: "Give your class, team or neighbourhood its own council of five AI agents. Members back the agent they agree with, and the council debates and splits your budget. Free, no sign-up.",
+      body: `<main class="page prose"><h1>Run an AI council for your group</h1><p class="lede">A class, a team or a neighbourhood gets its own council of five AI agents. Share the link, members back the agent they agree with, and the agents debate and split your budget in front of everyone.</p><h2>Templates</h2><ul>${TEMPLATES.map((t) => `<li><strong>${esc(t.label)}</strong>: ${esc(t.blurb)}</li>`).join("")}</ul></main>`,
+      jsonLd: [ORG(), crumbs(["Run a council", "/councils"]), { "@type": "WebApplication", name: "Group councils | Earthward AI", applicationCategory: "EducationalApplication", operatingSystem: "Web", url: `${config.siteUrl}/councils`, offers: { "@type": "Offer", price: "0", priceCurrency: "USD" } }],
+    };
+  if (/^\/c\/[a-z0-9]{6,16}$/.test(path))
+    return {
+      status: 200,
+      path,
+      noindex: true,
+      title: `A group council | ${SITE_NAME}`,
+      description: "A council of AI agents run by a group on Earthward AI. Back the agent you agree with before the next session.",
+      body: `<main class="page prose"><h1>A group council</h1><p class="lede">A council of AI agents run by a group on Earthward AI.</p><p><a href="/councils">Set up a council for your own group</a></p></main>`,
+      jsonLd: [ORG()],
+    };
+  const loc = path.match(/^\/(es|hi)$/);
+  if (loc) {
+    const t = LOCALES[loc[1] as Locale];
+    const [latest] = await store.listSessions(1);
+    return {
+      status: 200,
+      path,
+      lang: t.lang,
+      title: t.title,
+      description: t.description,
+      body: `<main class="page prose" lang="${t.lang}"><h1>${esc(t.h1)}</h1><p class="lede">${esc(t.lede)}</p><h2>${esc(t.howTitle)}</h2><ol>${t.steps.map((x) => `<li>${esc(x)}</li>`).join("")}</ol><h2>${esc(t.agentsTitle)}</h2><ul>${AGENTS.map((a) => `<li><a href="/agents/${a.id}">${esc(a.name)}</a>: ${esc(t.mandates[a.id] ?? "")}</li>`).join("")}</ul>${
+        latest ? `<h2>${esc(t.lastNight)}</h2><p>${esc(latest.title)} ${esc(t.englishNote)}</p><ol>${latest.allocations.slice(0, 3).map((a) => `<li>${esc(t.causes[a.causeId] ?? a.causeId)}</li>`).join("")}</ol>` : ""
+      }<p>${esc(t.footnote)}</p></main>`,
+      jsonLd: [ORG(), { "@type": "WebPage", name: t.title, inLanguage: t.lang, url: `${config.siteUrl}${path}` }],
+    };
+  }
+  if (path === "/digest")
+    return {
+      status: 200,
+      path,
+      noindex: true,
+      title: `The weekly digest | ${SITE_NAME}`,
+      description: "Every decision the Earthward AI council made this week, in one email.",
+      body: `<main class="page prose"><h1>The weekly digest</h1><p class="lede">Every decision the council made this week, in one email.</p></main>`,
+      jsonLd: [ORG()],
+    };
+  if (path === "/developers")
+    return {
+      status: 200,
+      path,
+      title: `Developers: the Earthward AI API | ${SITE_NAME}`,
+      description: "Open data on every decision the Earthward AI council makes, an OpenAPI 3.1 description, and a free API key to ask its five AI agents questions from your own app.",
+      body: `<main class="page prose"><h1>Build on the council</h1><p class="lede">Every decision the council makes is open data. Read it with no key, or get a free key to ask the five agents questions from your own app.</p><ul><li>GET /api/v1/council</li><li>GET /api/v1/state</li><li>GET /api/v1/sessions</li><li>GET /api/v1/sessions/latest</li><li>GET /api/v1/ledger</li><li>POST /api/v1/ask</li></ul><p><a href="/api/v1/openapi.json">OpenAPI description</a></p></main>`,
+      jsonLd: [ORG(), crumbs(["Developers", "/developers"]), { "@type": "WebAPI", name: "Earthward AI public API", documentation: `${config.siteUrl}/developers`, url: `${config.siteUrl}/api/v1`, provider: { "@type": "Organization", name: SITE_NAME } }],
+    };
   if (path === "/predict")
     return {
       status: 200,
@@ -409,7 +475,13 @@ export function injectPage(indexHtml: string, page: RenderedPage): string {
     .replace(/<meta property="og:description" content="[^"]*" \/>/, `<meta property="og:description" content="${esc(page.description)}" />`)
     .replace(/<meta property="og:image" content="[^"]*" \/>/, (m) => (page.ogImage ? `<meta property="og:image" content="${esc(page.ogImage)}" />\n    <meta name="twitter:image" content="${esc(page.ogImage)}" />` : m))
     .replace(/<script type="application\/ld\+json">[\s\S]*?<\/script>/, ld)
-    .replace("</head>", page.noindex ? `  <meta name="robots" content="noindex" />\n  </head>` : "</head>")
+    .replace('<html lang="en">', `<html lang="${page.lang ?? "en"}">`)
+    .replace(
+      "</head>",
+      `${ALTERNATES.some(([, p]) => p === page.path) ? ALTERNATES.map(([l, p]) => `  <link rel="alternate" hreflang="${l}" href="${config.siteUrl}${p}" />\n`).join("") : ""}${
+        page.noindex ? `  <meta name="robots" content="noindex" />\n` : ""
+      }  </head>`,
+    )
     .replace('<div id="root"></div>', `<div id="root"><div class="ssr">${page.body}</div></div>`);
 }
 
@@ -444,6 +516,8 @@ ${SITE_NAME} runs at ${u}. The council meets every night at 00:05 India Standard
 - Agents: ${AGENTS.map((a) => `[${a.name}](${u}/agents/${a.id})`).join(", ")}.
 - Causes: ${CAUSES.map((c) => `[${c.name}](${u}/causes/${c.id})`).join(", ")}.
 - [Council minutes feed](${u}/feed.xml): RSS of every session.
+- [Developers](${u}/developers): free JSON API. Read with no key: ${u}/api/v1/sessions/latest, ${u}/api/v1/council, ${u}/api/v1/ledger. OpenAPI: ${u}/api/v1/openapi.json.
+- [Run your own council](${u}/councils): a council for a class, team or neighbourhood, from a shareable link.
 
 ## Recent sessions
 

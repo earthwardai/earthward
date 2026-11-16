@@ -4,6 +4,7 @@ import { AGENTS, agentById, type AgentId } from "../../../shared/agents";
 import { CAUSES, causeById } from "../../../shared/causes";
 import { DOMAIN_LABELS, EARTH_AI, GLOBAL_AI } from "../../../shared/content";
 import type { Insights, Standing } from "../../../shared/types";
+import { GiveDirectly } from "../components/GiveDirectly";
 import { Sigil } from "../components/Sigil";
 import { api, countryName, credits, longDate, useLiveState, usePageMeta } from "../lib";
 import { NotFound } from "./Pages";
@@ -263,6 +264,7 @@ export function CausePage({ id }: { id: string }) {
           </ul>
         </>
       ) : null}
+      <GiveDirectly causeIds={[c.id]} title={`Fund ${c.name.toLowerCase()} for real`} />
       <p style={{ marginTop: 40 }}>
         See every cause on the <Link href="/earth-ai">Earth AI page</Link>.
       </p>

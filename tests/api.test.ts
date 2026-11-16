@@ -403,3 +403,60 @@ describe("cause nominations", () => {
     expect(round.round.winner).toBe(target);
   });
 });
+
+describe("public API v1", () => {
+  it("serves read endpoints with CORS and gates asking behind a key", async () => {
+    const { MemoryStore } = await import("../server/store/memory");
+    const { createApp } = await import("../server/app");
+    const app = createApp(new MemoryStore());
+    const council = await app.request("/api/v1/council");
+    expect(council.status).toBe(200);
+    expect(council.headers.get("access-control-allow-origin")).toBe("*");
+    const body = (await council.json()) as { agents: unknown[]; causes: unknown[] };
+    expect(body.agents).toHaveLength(5);
+    expect((await app.request("/api/v1/openapi.json")).status).toBe(200);
+    expect((await app.request("/api/v1/sessions/nope")).status).toBe(400);
+
+    const noKey = await app.request("/api/v1/ask", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ question: "Trees or water first?" }) });
+    expect(noKey.status).toBe(401);
+    const bad = await app.request("/api/v1/ask", { method: "POST", headers: { "content-type": "application/json", authorization: "Bearer ewk_aaaaaaaaaaaaaaaaaaaaaaaaaaaa" }, body: JSON.stringify({ question: "Trees or water first?" }) });
+    expect(bad.status).toBe(401);
+
+    const made = await app.request("/api/v1/keys", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name: "Test app", use: "A classroom dashboard of the council" }) });
+    expect(made.status).toBe(201);
+    const { key } = (await made.json()) as { key: string };
+    expect(key).toMatch(/^ewk_/);
+    const asked = await app.request("/api/v1/ask", { method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${key}` }, body: JSON.stringify({ question: "Trees or water first?" }) });
+    // No model in tests, so the key is accepted and the council reports it isn't answering.
+    expect(asked.status).toBe(503);
+  });
+});
+
+describe("notifications", () => {
+  it("accepts only real push services and stays off until configured", async () => {
+    const { validPushEndpoint } = await import("../server/notify");
+    expect(validPushEndpoint("https://fcm.googleapis.com/fcm/send/abc")).toBe(true);
+    expect(validPushEndpoint("https://updates.push.services.mozilla.com/wpush/v2/abc")).toBe(true);
+    expect(validPushEndpoint("https://web.push.apple.com/abc")).toBe(true);
+    expect(validPushEndpoint("http://fcm.googleapis.com/x")).toBe(false);
+    expect(validPushEndpoint("https://169.254.169.254/latest")).toBe(false);
+    expect(validPushEndpoint("https://fcm.googleapis.com.evil.example/x")).toBe(false);
+    expect(validPushEndpoint("https://fcm.googleapis.com:8443/x")).toBe(false);
+
+    const { MemoryStore } = await import("../server/store/memory");
+    const { createApp } = await import("../server/app");
+    const app = createApp(new MemoryStore());
+    expect(await (await app.request("/api/notify/config")).json()).toEqual({ push: null, digest: false });
+    const r = await app.request("/api/notify/digest", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ email: "a@example.com" }) });
+    expect(r.status).toBe(503);
+    expect((await app.request("/manifest.webmanifest")).status).not.toBe(404);
+  });
+
+  it("tells predictors whether they were right", async () => {
+    const { pushMessage } = await import("../server/notify");
+    const session = { day: "2026-11-20", title: "Water leads", spent: 500, allocations: [{ causeId: "water", share: 0.3, credits: 150, units: 12 }, { causeId: "reefs", share: 0.2, credits: 100, units: 1 }] } as unknown as import("../shared/types").Session;
+    expect(pushMessage(session, "water").title).toBe("You called it");
+    expect(pushMessage(session, "reefs").title).toBe("Not this time");
+    expect(pushMessage(session, null).title).toBe("Water leads");
+  });
+});

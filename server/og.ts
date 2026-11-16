@@ -25,22 +25,22 @@ const h = (type: string, style: Record<string, unknown>, ...children: (Node | st
   props: { style: { display: "flex", ...style }, children: children.filter((c) => c !== null) },
 });
 
-let assets: Promise<{ fonts: { name: string; data: Buffer; weight: 400 | 500; style: "normal" }[]; emblem: string }> | null = null;
+let assets: Promise<{ fonts: { name: string; data: Buffer; weight: 400 | 500 | 700; style: "normal" }[]; emblem: string }> | null = null;
 function loadAssets() {
   assets ??= (async () => {
     const require = createRequire(import.meta.url);
     const font = (pkg: string, file: string) => readFile(require.resolve(`${pkg}/files/${file}`));
-    const [sans, sansMedium, serif] = await Promise.all([
+    const [sans, sansMedium, sansBold] = await Promise.all([
       font("@fontsource/hanken-grotesk", "hanken-grotesk-latin-400-normal.woff"),
       font("@fontsource/hanken-grotesk", "hanken-grotesk-latin-500-normal.woff"),
-      font("@fontsource/bodoni-moda", "bodoni-moda-latin-500-normal.woff"),
+      font("@fontsource/hanken-grotesk", "hanken-grotesk-latin-700-normal.woff"),
     ]);
     const emblem = await readFile(join(config.staticDir, "brand", "emblem-160.jpg")).catch(() => null);
     return {
       fonts: [
         { name: "Hanken", data: sans, weight: 400, style: "normal" },
         { name: "Hanken", data: sansMedium, weight: 500, style: "normal" },
-        { name: "Bodoni", data: serif, weight: 500, style: "normal" },
+        { name: "Hanken", data: sansBold, weight: 700, style: "normal" },
       ],
       emblem: emblem ? `data:image/jpeg;base64,${emblem.toString("base64")}` : "",
     };
@@ -89,7 +89,7 @@ export async function councilImage(session: Session): Promise<Buffer> {
   return render(
     frame(
       `Council minutes, ${dateLabel(session.day)}`,
-      [h("div", { fontFamily: "Bodoni", fontSize: 54, lineHeight: 1.08, width: 1072 }, session.title), h("div", { flexDirection: "column", gap: 14 }, ...rows)],
+      [h("div", { fontWeight: 700, fontSize: 54, lineHeight: 1.1, letterSpacing: -1, width: 1072 }, session.title), h("div", { flexDirection: "column", gap: 14 }, ...rows)],
       emblem,
     ),
   );
@@ -109,7 +109,7 @@ export async function impactImage(amount: number, items: { causeId: string; unit
   return render(
     frame(
       "My donation to the Earthward AI council",
-      [h("div", { fontFamily: "Bodoni", fontSize: 76, lineHeight: 1 }, `${fmt(amount)} credits`), h("div", { fontSize: 30, color: MUTED }, "funded"), h("div", { flexDirection: "column", gap: 14 }, ...lines)],
+      [h("div", { fontWeight: 700, fontSize: 80, lineHeight: 1, letterSpacing: -2 }, `${fmt(amount)} credits`), h("div", { fontSize: 30, color: MUTED }, "funded"), h("div", { flexDirection: "column", gap: 14 }, ...lines)],
       emblem,
     ),
   );

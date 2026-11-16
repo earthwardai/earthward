@@ -1,6 +1,6 @@
 import { FieldValue, Firestore, Timestamp, type DocumentReference } from "@google-cloud/firestore";
 import { makeEntry, type LedgerEntry } from "../../shared/ledger";
-import type { Nomination, NominationRound, Session, Treasury } from "../../shared/types";
+import type { ArenaResult, GroupPledge, GroupSession, Nomination, NominationRound, Session, Treasury } from "../../shared/types";
 import {
   QuotaExceededError,
   SessionExistsError,
@@ -15,6 +15,12 @@ import {
   type SecurityEvent,
   type StatsIncrement,
   type Store,
+  type ApiKeyRecord,
+  type GroupRecord,
+  type PushSubRecord,
+  type SubscriberRecord,
+  type PledgeResult,
+  GROUP_PLEDGE_LIMIT,
 } from "./types";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -445,5 +451,129 @@ export class FirestoreStore implements Store {
   async latestRound() {
     const snap = await this.db.collection("nominationRounds").orderBy("month", "desc").limit(1).get();
     return snap.empty ? null : (snap.docs[0].data() as NominationRound);
+  }
+
+  async saveArena(result: ArenaResult) {
+    await this.db.collection("arena").doc(result.day).set(result);
+  }
+
+  async getArena(day: string) {
+    const snap = await this.db.collection("arena").doc(day).get();
+    return snap.exists ? (snap.data() as ArenaResult) : null;
+  }
+
+  async createApiKey(key: ApiKeyRecord) {
+    await this.db.collection("apiKeys").doc(key.hash).create(key);
+  }
+
+  async getApiKey(hash: string) {
+    const snap = await this.db.collection("apiKeys").doc(hash).get();
+    return snap.exists ? (snap.data() as ApiKeyRecord) : null;
+  }
+
+  async useApiKey(hash: string, day: string, limit: number) {
+    const ref = this.db.collection("apiKeyUse").doc(`${hash.slice(0, 32)}_${day}`);
+    return this.db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      const n = snap.exists ? Number(snap.get("count") ?? 0) : 0;
+      if (n >= limit) return false;
+      // expireAt lets a Firestore TTL policy clean these up.
+      tx.set(ref, { count: n + 1, day, expireAt: new Date(Date.now() + 7 * 86_400_000) });
+      return true;
+    });
+  }
+
+  async countApiKeys() {
+    const agg = await this.db.collection("apiKeys").count().get();
+    return agg.data().count;
+  }
+
+  async createGroup(group: GroupRecord) {
+    await this.db.collection("groups").doc(group.id).create(group);
+  }
+
+  async getGroup(id: string) {
+    const snap = await this.db.collection("groups").doc(id).get();
+    return snap.exists ? (snap.data() as GroupRecord) : null;
+  }
+
+  async addGroupPledge(id: string, pledge: GroupPledge, vidHash: string): Promise<PledgeResult> {
+    const ref = this.db.collection("groups").doc(id);
+    return this.db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      if (!snap.exists) return "missing";
+      const g = snap.data() as GroupRecord;
+      if (g.pledgeVids.includes(vidHash)) return "duplicate";
+      if (g.pledges.length >= GROUP_PLEDGE_LIMIT) return "full";
+      tx.update(ref, { pledges: [...g.pledges, pledge], pledgeVids: [...g.pledgeVids, vidHash] });
+      return "ok";
+    });
+  }
+
+  async saveGroupSession(id: string, session: GroupSession, expected: number) {
+    const ref = this.db.collection("groups").doc(id);
+    return this.db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      if (!snap.exists) return false;
+      const g = snap.data() as GroupRecord;
+      if ((g.sessions.at(-1)?.n ?? 0) !== expected) return false;
+      tx.update(ref, { sessions: [...g.sessions, session].slice(-10), pledges: [], pledgeVids: [], lastConvenedAt: session.at });
+      return true;
+    });
+  }
+
+  async countGroups() {
+    const agg = await this.db.collection("groups").count().get();
+    return agg.data().count;
+  }
+
+  async savePushSub(sub: PushSubRecord) {
+    await this.db.collection("pushSubs").doc(sub.id).set(sub);
+  }
+
+  async deletePushSub(id: string) {
+    await this.db.collection("pushSubs").doc(id).delete();
+  }
+
+  async listPushSubs(limit: number) {
+    const snap = await this.db.collection("pushSubs").limit(limit).get();
+    return snap.docs.map((d) => d.data() as PushSubRecord);
+  }
+
+  async countPushSubs() {
+    return (await this.db.collection("pushSubs").count().get()).data().count;
+  }
+
+  async upsertSubscriber(sub: SubscriberRecord) {
+    const ref = this.db.collection("subscribers").doc(sub.id);
+    return this.db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      const existing = snap.exists ? (snap.data() as SubscriberRecord) : null;
+      if (existing?.status === "active") return existing;
+      tx.set(ref, sub);
+      return sub;
+    });
+  }
+
+  async findSubscriber(token: string) {
+    const snap = await this.db.collection("subscribers").where("token", "==", token).limit(1).get();
+    return snap.empty ? null : (snap.docs[0].data() as SubscriberRecord);
+  }
+
+  async activateSubscriber(id: string) {
+    await this.db.collection("subscribers").doc(id).update({ status: "active", confirmedAt: new Date().toISOString() });
+  }
+
+  async deleteSubscriber(id: string) {
+    await this.db.collection("subscribers").doc(id).delete();
+  }
+
+  async listActiveSubscribers(limit: number) {
+    const snap = await this.db.collection("subscribers").where("status", "==", "active").limit(limit).get();
+    return snap.docs.map((d) => d.data() as SubscriberRecord);
+  }
+
+  async countSubscribers() {
+    return (await this.db.collection("subscribers").where("status", "==", "active").count().get()).data().count;
   }
 }

@@ -1,0 +1,19 @@
+{
+  "name": "Earthward AI",
+  "short_name": "Earthward",
+  "description": "Five AI agents decide every night where donations do the most good for the Earth.",
+  "start_url": "/?utm_source=app",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#171614",
+  "theme_color": "#171614",
+  "icons": [
+    { "src": "/brand/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/brand/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }
+  ],
+  "shortcuts": [
+    { "name": "Predict tonight", "url": "/predict?utm_source=app" },
+    { "name": "Ask the council", "url": "/ask?utm_source=app" },
+    { "name": "Last night's debate", "url": "/?utm_source=app#latest" }
+  ]
+}

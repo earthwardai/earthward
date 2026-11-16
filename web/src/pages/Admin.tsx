@@ -42,6 +42,8 @@ interface Overview {
   sessions: Session[];
   github: { repo: string; stars: number | null; forks: number | null; issues: number | null } | null;
   nominations: { id: string; name: string; place: string | null; summary: string; status: string; votes: number; at: string; email?: string | null }[];
+  groups: number | null;
+  apiKeys: number | null;
   timeZone: string;
 }
 
@@ -278,6 +280,8 @@ export function AdminPage() {
           </div>
         ) : null}
         {data.github ? <div className="kpi"><dt>Forks, open issues</dt><dd>{data.github.forks ?? "–"}, {data.github.issues ?? "–"}</dd></div> : null}
+        <div className="kpi"><dt>Group councils</dt><dd>{data.groups === null ? "–" : credits(data.groups)}</dd></div>
+        <div className="kpi"><dt>API keys</dt><dd>{data.apiKeys === null ? "–" : credits(data.apiKeys)}</dd></div>
       </dl>
 
       <div className="panel">

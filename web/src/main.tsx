@@ -17,6 +17,10 @@ import { startTracking, trackView } from "./track";
 import { FeedbackButton } from "./components/Feedback";
 import { PredictPage } from "./pages/Predict";
 import { NominatePage } from "./pages/Nominate";
+import { DevelopersPage } from "./pages/Developers";
+import { CouncilsPage, GroupPage } from "./pages/Groups";
+import { DigestPage } from "./pages/Digest";
+import { LocalePage } from "./pages/Locale";
 
 function ThemeToggle() {
   const [theme, setTheme] = useTheme();
@@ -128,6 +132,9 @@ function Footer() {
               <Link href="/nominate">Nominate a cause</Link>
             </li>
             <li>
+              <Link href="/councils">Run a council for your group</Link>
+            </li>
+            <li>
               <Link href="/global-ai-council">Global AI council</Link>
             </li>
             {AGENTS.map((a) => (
@@ -145,6 +152,12 @@ function Footer() {
             </li>
             <li>
               <Link href="/contact">Contact and feedback</Link>
+            </li>
+            <li>
+              <Link href="/developers">Developers and API</Link>
+            </li>
+            <li>
+              <Link href="/es">Español</Link> · <Link href="/hi">हिन्दी</Link>
             </li>
             <li>
               <a href="/feed.xml">Minutes feed (RSS)</a>
@@ -221,6 +234,12 @@ function App() {
         <Route path="/ask" component={AskPage} />
         <Route path="/predict" component={PredictPage} />
         <Route path="/nominate" component={NominatePage} />
+        <Route path="/developers" component={DevelopersPage} />
+        <Route path="/councils" component={CouncilsPage} />
+        <Route path="/digest" component={DigestPage} />
+        <Route path="/es">{() => <LocalePage lang="es" />}</Route>
+        <Route path="/hi">{() => <LocalePage lang="hi" />}</Route>
+        <Route path="/c/:id">{(p) => <GroupPage id={p.id} />}</Route>
         <Route path="/impact/:id">{(p) => <ImpactPage id={p.id} />}</Route>
         <Route path="/admin" component={AdminPage} />
         <Route component={NotFound} />

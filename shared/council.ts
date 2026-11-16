@@ -109,8 +109,8 @@ export function mergeProposals(proposals: Proposal[], weights: Record<AgentId, n
  * to less than 1 when the per-cause cap cannot be met (fewer than four causes);
  * whatever the cap holds back stays in the treasury.
  */
-export function allocateCredits(pool: number, shares: Shares): { allocations: Allocation[]; spent: number; reserve: number } {
-  const spend = Math.floor(pool * RULES.spendRatio);
+export function allocateCredits(pool: number, shares: Shares, spendRatio = RULES.spendRatio): { allocations: Allocation[]; spent: number; reserve: number } {
+  const spend = Math.floor(pool * spendRatio);
   const ids = (Object.keys(shares) as CauseId[]).filter((id) => (shares[id] ?? 0) > 0);
   if (spend <= 0 || ids.length === 0) return { allocations: [], spent: 0, reserve: pool };
   const totalShare = Math.min(1, ids.reduce((s, id) => s + shares[id]!, 0));
@@ -197,4 +197,17 @@ export function nextSessionAt(now: Date, timeZone: string): Date {
 /** The day a session at `now` decides on: the local day that just ended. */
 export function sessionDay(now: Date, timeZone: string): string {
   return dayKey(new Date(now.getTime() - 60 * 60 * 1000), timeZone);
+}
+
+/** 1 when two splits are identical, 0 when they share nothing. Both are normalised first. */
+export function shareSimilarity(a: Partial<Record<string, number>>, b: Partial<Record<string, number>>): number {
+  const norm = (x: Partial<Record<string, number>>) => {
+    const t = Object.values(x).reduce((s: number, v) => s + (v ?? 0), 0) || 1;
+    return Object.fromEntries(Object.entries(x).map(([k, v]) => [k, (v ?? 0) / t]));
+  };
+  const na = norm(a);
+  const nb = norm(b);
+  let l1 = 0;
+  for (const k of new Set([...Object.keys(na), ...Object.keys(nb)])) l1 += Math.abs((na[k] ?? 0) - (nb[k] ?? 0));
+  return Math.max(0, 1 - l1 / 2);
 }

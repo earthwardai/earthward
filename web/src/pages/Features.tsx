@@ -5,6 +5,7 @@ import { causeById } from "../../../shared/causes";
 import { ASK } from "../../../shared/content";
 import type { AskResponse, ImpactResponse } from "../../../shared/types";
 import { Share } from "../components/Share";
+import { GiveDirectly } from "../components/GiveDirectly";
 import { Sigil } from "../components/Sigil";
 import { ApiError, api, countdown, credits, longDate, useLiveState, useNow, usePageMeta } from "../lib";
 
@@ -222,6 +223,7 @@ export function ImpactPage({ id }: { id: string }) {
           text={`My ${credits(d.amount)} credits on the Earthward AI council funded about ${top.join(" and ")}. Five AI agents decided where.`}
         />
       </div>
+      <GiveDirectly causeIds={data.items.slice(0, 3).map((i) => i.causeId)} title="Make your share real" />
     </main>
   );
 }

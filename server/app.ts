@@ -15,7 +15,11 @@ import type { ArgueTally, ImpactResponse, LeaderRow, PredictionMe, PublicDonatio
 import { config } from "./config";
 import { AskUnavailableError, askCouncil } from "./ask";
 import { runCouncil } from "./council";
+import { runArena } from "./arena";
 import { announceSession } from "./autopost";
+import { publicApi } from "./publicApi";
+import { groupsApi } from "./groups";
+import { notifyApi, pushNightly, sendDigest } from "./notify";
 import { badgeSvg, embedHtml } from "./embed";
 import { councilImage, impactImage } from "./og";
 import { runNominationRound } from "./nominations";
@@ -174,6 +178,10 @@ export function createApp(store: Store) {
 
   // --- Public API -----------------------------------------------------------
 
+  app.route("/api/v1", publicApi(store));
+  app.route("/api/groups", groupsApi(store));
+  app.route("/api/notify", notifyApi(store));
+
   app.get("/api/health", (c) => c.json({ status: "ok", version: config.version, startedAt }));
 
   app.get("/api/state", async (c) => {
@@ -244,6 +252,14 @@ export function createApp(store: Store) {
   app.get("/api/sessions", async (c) => {
     const limit = Math.min(Math.max(Number(c.req.query("limit") ?? 14), 1), 60);
     return c.json({ sessions: await store.listSessions(limit) });
+  });
+
+  app.get("/api/sessions/:day/arena", async (c) => {
+    const day = c.req.param("day");
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return c.json({ error: "Not found" }, 404);
+    const arena = await store.getArena(day);
+    c.header("cache-control", "public, max-age=300");
+    return arena ? c.json(arena) : c.json({ error: "No arena for that night." }, 404);
   });
 
   app.get("/api/sessions/:day", async (c) => {
@@ -620,6 +636,10 @@ export function createApp(store: Store) {
       ["/ask", today],
       ["/predict", today],
       ["/nominate", today],
+      ["/developers", today],
+      ["/councils", today],
+      ["/es", today],
+      ["/hi", today],
       ["/how-it-works", today],
       ["/ledger", latest],
       ["/about", today],
@@ -719,21 +739,37 @@ export function createApp(store: Store) {
 
   // --- Scheduler hook -------------------------------------------------------
 
-  app.post("/internal/council", async (c) => {
+  /** True only for Cloud Scheduler's signed OIDC token. */
+  async function fromScheduler(c: Context): Promise<boolean> {
     const token = c.req.header("authorization")?.replace(/^Bearer\s+/i, "");
-    if (!token || !config.schedulerEmail || !config.schedulerAudience) return c.json({ error: "Not found" }, 404);
+    if (!token || !config.schedulerEmail || !config.schedulerAudience) return false;
     try {
       const ticket = await oauth.verifyIdToken({ idToken: token, audience: config.schedulerAudience });
       const p = ticket.getPayload();
       if (!p?.email_verified || p.email !== config.schedulerEmail) throw new Error("unexpected caller");
+      return true;
     } catch {
       security(c, "admin_denied", "scheduler token");
-      return c.json({ error: "Not found" }, 404);
+      return false;
     }
+  }
+
+  app.post("/internal/digest", async (c) => {
+    if (!(await fromScheduler(c))) return c.json({ error: "Not found" }, 404);
+    const sent = await sendDigest(store);
+    console.log("digest sent", sent);
+    return c.json({ sent });
+  });
+
+  app.post("/internal/council", async (c) => {
+    if (!(await fromScheduler(c))) return c.json({ error: "Not found" }, 404);
     await store.ensureGenesis(config.genesisCredits);
     const result = await runCouncil(store, sessionDay(new Date(), config.timeZone));
     if (result.status === "created") await scorePredictions(store, result.session).catch((err) => console.error("scoring failed", err));
-    if (result.status === "created") void announceSession(result.session).then((r) => console.log("autopost", JSON.stringify(r)));
+    // Cloud Run throttles CPU after the response, so the follow-up work is awaited here.
+    if (result.status === "created") console.log("autopost", JSON.stringify(await announceSession(result.session)));
+    if (result.status === "created") await runArena(store, result.session).catch((err) => console.error("arena failed", err));
+    if (result.status === "created") console.log("push sent", await pushNightly(store, result.session).catch((err) => (console.error("push failed", err), 0)));
     // The first session of each month also settles the nomination round.
     const today = dayKey(new Date(), config.timeZone);
     if (today.endsWith("-01")) await runNominationRound(store, today.slice(0, 7)).catch((err) => console.error("nomination round failed", err));
@@ -787,7 +823,7 @@ export function createApp(store: Store) {
   app.get("/api/admin/overview", async (c) => {
     const now = Date.now();
     const days = Array.from({ length: 14 }, (_, i) => dayKey(new Date(now - i * 86_400_000), config.timeZone)).reverse();
-    const [stats, visits, donations, securityEvents, treasury, sessions, messages, nominations] = await Promise.all([
+    const [stats, visits, donations, securityEvents, treasury, sessions, messages, nominations, groups, apiKeys] = await Promise.all([
       store.getStats(days),
       store.listAnalytics(300),
       store.listDonations(60),
@@ -796,10 +832,12 @@ export function createApp(store: Store) {
       store.listSessions(7),
       store.listMessages(50),
       store.listNominations("all", 100),
+      store.countGroups().catch(() => null),
+      store.countApiKeys().catch(() => null),
     ]);
     await githubStars();
     const github = config.githubRepo ? { repo: config.githubRepo, stars: stars.count, forks: stars.forks ?? null, issues: stars.issues ?? null } : null;
-    return c.json({ stats, visits, donations, security: securityEvents, treasury, sessions, messages, nominations, github, timeZone: config.timeZone });
+    return c.json({ stats, visits, donations, security: securityEvents, treasury, sessions, messages, nominations, github, groups, apiKeys, timeZone: config.timeZone });
   });
 
   app.post("/api/admin/nominations/:id", async (c) => {
@@ -807,6 +845,13 @@ export function createApp(store: Store) {
     if (body.status !== "approved" && body.status !== "rejected" && body.status !== "pending") return c.json({ error: "Use approved, rejected or pending." }, 400);
     const ok = await store.setNominationStatus(c.req.param("id"), body.status);
     return ok ? c.json({ ok: true }) : c.json({ error: "Not found" }, 404);
+  });
+
+  app.post("/api/admin/arena/:day", async (c) => {
+    const session = await store.getSession(c.req.param("day"));
+    if (!session) return c.json({ error: "No session that day." }, 404);
+    const arena = await runArena(store, session, true);
+    return c.json({ arena });
   });
 
   app.post("/api/admin/nominations-round", async (c) => {
@@ -844,8 +889,15 @@ export function createApp(store: Store) {
     }),
   );
   // Only real files (with an extension) come from disk; every other path gets the app shell.
-  const files = serveStatic({ root: config.staticDir });
-  app.use("*", (c, next) => (/\.[a-z0-9]{2,5}$/i.test(c.req.path) ? files(c, next) : next()));
+  const files = serveStatic({
+    root: config.staticDir,
+    onFound: (path, c) => {
+      // The service worker must be revalidated, or an old one could linger for a day.
+      c.header("Cache-Control", path.endsWith("sw.js") ? "no-cache" : "public, max-age=3600");
+      if (path.endsWith(".webmanifest")) c.header("Content-Type", "application/manifest+json");
+    },
+  });
+  app.use("*", (c, next) => (/\.[a-z0-9]{2,11}$/i.test(c.req.path) ? files(c, next) : next()));
 
   let indexHtml: string | null = null;
   app.get("*", async (c) => {

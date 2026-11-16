@@ -10,6 +10,7 @@ import { Emblem } from "../components/Emblem";
 import { Journey } from "../components/Journey";
 import { LedgerList, VerifyChain } from "../components/Ledger";
 import { Sigil } from "../components/Sigil";
+import { StayInTouch } from "../components/StayInTouch";
 import { ago, countdown, countryName, credits, getLedger, longDate, useLiveState, useNow, usePageMeta, useReducedMotion, useTween } from "../lib";
 import { AskTeaser } from "./Features";
 import { PredictCard } from "./Predict";
@@ -239,6 +240,34 @@ export function Home() {
       </section>
 
       <AskTeaser />
+
+      <section className="more" aria-labelledby="more-title">
+        <h2 id="more-title">More to do here</h2>
+        <div className="more-grid">
+          <Link href="/councils" className="more-card" data-track="more-councils">
+            <span className="more-kicker">For your class, team or street</span>
+            <strong>Run your own AI council</strong>
+            <span className="muted">Share a link, members back an agent, and the council debates your budget live.</span>
+          </Link>
+          <Link href={session ? `/council/${session.day}#arena-title` : "/ledger"} className="more-card" data-track="more-arena">
+            <span className="more-kicker">Model arena</span>
+            <strong>Same night, other models</strong>
+            <span className="muted">The same briefing sent to other AI models. See how much the decision depends on the model.</span>
+          </Link>
+          <Link href={session ? `/council/${session.day}#give-title` : "/earth-ai"} className="more-card" data-track="more-give">
+            <span className="more-kicker">Real organisations</span>
+            <strong>Give for real</strong>
+            <span className="muted">Every cause links to an established charity doing the work, through a nonprofit platform.</span>
+          </Link>
+          <Link href="/developers" className="more-card" data-track="more-api">
+            <span className="more-kicker">Open data</span>
+            <strong>Build on the council</strong>
+            <span className="muted">A free JSON API for every decision, and keys to ask the agents from your own app.</span>
+          </Link>
+        </div>
+      </section>
+
+      <StayInTouch />
 
       <section id="decision" aria-labelledby="decision-title">
         <div className="section-head">

@@ -52,7 +52,7 @@ export function parseJsonReply<T>(text: string): T {
   }
 }
 
-function vertex(model: string): Llm {
+export function vertex(model: string): Llm {
   let client: GoogleGenAI | null = null;
   return {
     provider: "vertex",

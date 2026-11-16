@@ -14,6 +14,8 @@ import { api, ApiError, credits, getLedger, getSession, getSessions, longDate, u
 import { FeedbackForm } from "../components/Feedback";
 import { DebateReplay } from "../components/DebateReplay";
 import { ArgueVote } from "../components/ArgueVote";
+import { ModelArena } from "../components/ModelArena";
+import { GiveDirectly } from "../components/GiveDirectly";
 
 export function LedgerPage() {
   usePageMeta("The ledger", "Every Earthward donation and council decision, chained by SHA-256 hashes you can verify in your browser.");
@@ -72,6 +74,19 @@ export function SessionPage({ day }: { day: string }) {
       .catch(() => undefined);
   }, [day]);
 
+  // Links from elsewhere can point at a section that loads after the page does (#arena-title).
+  useEffect(() => {
+    const id = window.location.hash.slice(1);
+    if (!session || !id || id === "replay") return;
+    let tries = 0;
+    const t = setInterval(() => {
+      const el = document.getElementById(id);
+      if (el || ++tries > 12) clearInterval(t);
+      el?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 250);
+    return () => clearInterval(t);
+  }, [session]);
+
   return (
     <main id="main" className="page">
       <p className="lede">Council minutes</p>
@@ -81,6 +96,8 @@ export function SessionPage({ day }: { day: string }) {
         <>
           <DebateReplay session={session} />
           <ArgueVote day={session.day} />
+          <ModelArena session={session} />
+          <GiveDirectly causeIds={session.allocations.slice(0, 3).map((a) => a.causeId)} title="Back tonight's top causes for real" />
           <div className="decision" style={{ marginTop: 48 }}>
             <div>
               <h2 className="decision-title">{session.title}</h2>

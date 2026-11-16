@@ -1,4 +1,5 @@
 import type { CauseId } from "./causes";
+import { worldScoped } from "./world";
 
 export type AgentId = "verdant" | "tide" | "kindred" | "hearth" | "horizon";
 
@@ -13,7 +14,7 @@ export interface Agent {
   leanings: Partial<Record<CauseId, number>>;
 }
 
-export const AGENTS: Agent[] = [
+const EARTHWARD_AGENTS: Agent[] = [
   {
     id: "verdant",
     name: "Verdant",
@@ -61,6 +62,12 @@ export const AGENTS: Agent[] = [
   },
 ];
 
-export const AGENT_IDS = AGENTS.map((a) => a.id) as AgentId[];
+/** The council's agents: Earthward's five, or a group council's own while it deliberates (shared/world.ts). */
+export const AGENTS: Agent[] = worldScoped(EARTHWARD_AGENTS, (w) => w.agents);
+
+export const AGENT_IDS: AgentId[] = worldScoped(
+  EARTHWARD_AGENTS.map((a) => a.id),
+  (w) => w.agentIds,
+);
 
 export const agentById = (id: string): Agent | undefined => AGENTS.find((a) => a.id === id);

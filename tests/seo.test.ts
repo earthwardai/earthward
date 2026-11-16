@@ -26,6 +26,20 @@ describe("pages for crawlers and answer engines", () => {
     expect(html).toContain("10,000 credits in the treasury now");
   });
 
+  it("serves Spanish and Hindi pages that point at each other", async () => {
+    const es = await (await get("/es")).text();
+    expect(es).toContain('<html lang="es">');
+    expect(es).toContain("Cinco agentes de IA deciden cada noche");
+    expect(es).toContain('hreflang="hi" href="https://earthwardai.com/hi"');
+    const hi = await (await get("/hi")).text();
+    expect(hi).toContain('<html lang="hi">');
+    expect(hi).toContain("पाँच AI एजेंट");
+    const home = await (await get("/")).text();
+    expect(home).toContain('<html lang="en">');
+    expect(home).toContain('hreflang="es" href="https://earthwardai.com/es"');
+    expect(await (await get("/councils")).text()).not.toContain('hreflang="es"');
+  });
+
   it("gives the rulebook its own title and content", async () => {
     const html = await (await get("/how-it-works")).text();
     expect(html).toContain("<title>How Earthward AI works</title>");

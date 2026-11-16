@@ -2,6 +2,7 @@ import type { AgentId } from "./agents";
 import type { CauseId } from "./causes";
 import type { Allocation, Proposal } from "./council";
 import type { LedgerEntry } from "./ledger";
+import type { CouncilSpec } from "./spec";
 
 export interface Treasury {
   balance: number;
@@ -206,4 +207,64 @@ export interface NominationRound {
   winner: string;
   statement: string;
   model: string;
+}
+
+/** The same night decided by other models, for comparison. Not part of the ledger. */
+export interface ArenaEntry {
+  label: string;
+  model: string;
+  allocations: { causeId: string; share: number; credits: number }[];
+  quotes: { agentId: string; quote: string }[];
+  /** How close this split is to the official one, from 0 to 1. */
+  agreement: number;
+  /** Agents that fell back to standing preferences because the model failed. */
+  fallbacks: number;
+}
+
+export interface ArenaResult {
+  day: string;
+  at: string;
+  official: string;
+  entries: ArenaEntry[];
+}
+
+// --- Group councils ----------------------------------------------------------
+
+/** A member backing one agent before the next session, with an optional note. */
+export interface GroupPledge {
+  id: string;
+  name: string | null;
+  agentId: string;
+  message: string | null;
+  at: string;
+}
+
+export interface GroupSession {
+  n: number;
+  at: string;
+  budget: number;
+  backers: number;
+  influence: Record<string, number>;
+  proposals: Proposal[];
+  allocations: Allocation[];
+  spent: number;
+  reserve: number;
+  title: string;
+  minutes: string;
+  model: string;
+}
+
+/** A council a class, team or neighbourhood runs from a shareable link. */
+export interface GroupCouncil {
+  id: string;
+  name: string;
+  template: string;
+  budget: number;
+  spec: CouncilSpec;
+  createdAt: string;
+  /** Backing since the last session. Cleared when the council meets. */
+  pledges: GroupPledge[];
+  /** Newest last, at most ten. */
+  sessions: GroupSession[];
+  lastConvenedAt: string | null;
 }

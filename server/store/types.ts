@@ -1,6 +1,6 @@
 import type { AgentId } from "../../shared/agents";
 import type { LedgerEntry } from "../../shared/ledger";
-import type { Nomination, NominationRound, Session, TrackEvent, Treasury } from "../../shared/types";
+import type { ArenaResult, GroupCouncil, GroupPledge, GroupSession, Nomination, NominationRound, Session, TrackEvent, Treasury } from "../../shared/types";
 
 export interface DonationRecord {
   id: string;
@@ -119,6 +119,46 @@ export interface PredictorRecord {
 export class QuotaExceededError extends Error {}
 export class SessionExistsError extends Error {}
 
+export interface ApiKeyRecord {
+  hash: string;
+  name: string;
+  use: string;
+  createdAt: string;
+  ipHash: string;
+  disabled?: boolean;
+}
+
+export interface GroupRecord extends GroupCouncil {
+  ownerHash: string;
+  /** Hashed visitor ids that have backed an agent since the last session. */
+  pledgeVids: string[];
+  ipHash: string;
+}
+
+export interface PushSubRecord {
+  /** SHA-256 of the push endpoint. */
+  id: string;
+  endpoint: string;
+  keys: { p256dh: string; auth: string };
+  /** Hashed visitor id, so the nightly message can say how their prediction did. */
+  vidHash: string | null;
+  createdAt: string;
+}
+
+export interface SubscriberRecord {
+  /** SHA-256 of the lowercased email. */
+  id: string;
+  email: string;
+  status: "pending" | "active";
+  token: string;
+  createdAt: string;
+  confirmedAt: string | null;
+}
+
+export type PledgeResult = "ok" | "duplicate" | "full" | "missing";
+/** Members who can back an agent between two sessions of one group council. */
+export const GROUP_PLEDGE_LIMIT = 200;
+
 export interface Store {
   /** Creates the genesis entry and seeds the treasury once. Safe to call on every boot. */
   ensureGenesis(credits: number): Promise<void>;
@@ -173,6 +213,31 @@ export interface Store {
   upvoteNomination(id: string, vidHash: string): Promise<"created" | "exists" | "missing">;
   saveRound(round: NominationRound): Promise<void>;
   latestRound(): Promise<NominationRound | null>;
+  saveArena(result: ArenaResult): Promise<void>;
+  /** Developer API keys, stored by the SHA-256 of the key. */
+  createApiKey(key: ApiKeyRecord): Promise<void>;
+  getApiKey(hash: string): Promise<ApiKeyRecord | null>;
+  /** Counts one call against a key's daily quota. False once the quota is used up. */
+  useApiKey(hash: string, day: string, limit: number): Promise<boolean>;
+  countApiKeys(): Promise<number>;
+  createGroup(group: GroupRecord): Promise<void>;
+  getGroup(id: string): Promise<GroupRecord | null>;
+  addGroupPledge(id: string, pledge: GroupPledge, vidHash: string): Promise<PledgeResult>;
+  /** Appends a session if the latest one is still number `expected` (0 for none), so two convenes can't race. */
+  saveGroupSession(id: string, session: GroupSession, expected: number): Promise<boolean>;
+  countGroups(): Promise<number>;
+  savePushSub(sub: PushSubRecord): Promise<void>;
+  deletePushSub(id: string): Promise<void>;
+  listPushSubs(limit: number): Promise<PushSubRecord[]>;
+  countPushSubs(): Promise<number>;
+  /** Creates or refreshes a pending subscriber. Returns the stored record (an active one stays active). */
+  upsertSubscriber(sub: SubscriberRecord): Promise<SubscriberRecord>;
+  findSubscriber(token: string): Promise<SubscriberRecord | null>;
+  activateSubscriber(id: string): Promise<void>;
+  deleteSubscriber(id: string): Promise<void>;
+  listActiveSubscribers(limit: number): Promise<SubscriberRecord[]>;
+  countSubscribers(): Promise<number>;
+  getArena(day: string): Promise<ArenaResult | null>;
   /** Claims the right to score a day's predictions. True only for the first caller. */
   claimScoring(day: string): Promise<boolean>;
   listSecurity(limit: number): Promise<SecurityEvent[]>;
