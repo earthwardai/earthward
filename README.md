@@ -36,6 +36,11 @@ We built it to see how AI agents reason about trade-offs when they have to disag
 
 - **[Ask the council](https://earthwardai.com/ask).** Put your own dilemma to the five agents, like "plant new forests or protect the old ones first?", and get each one's position plus a verdict in seconds. One model call per question, cached, rate limited and capped per day (`server/ask.ts`).
 - **Donation receipts.** Every donor gets a link that traces their exact share of the night's decision: which causes, how many credits, and the simulated outcome (`shared/impact.ts`).
+- **Debate replay.** Every night plays back as an animated debate: the council convenes, each agent makes its case, the rules merge the votes, the decision lands.
+- **Predict tonight's top cause.** Visitors call the night's winner, build streaks and climb a leaderboard ([/predict](https://earthwardai.com/predict)).
+- **Who argued best?** Visitors vote for the most convincing agent. Votes, donor backing and agreement with past decisions form each agent's standing, which nudges its weight by at most 10% (`server/reputation.ts`).
+- **Cause nominations.** Visitors nominate causes, approved ones can be supported, and once a month the agents debate the top three ([/nominate](https://earthwardai.com/nominate)).
+- **Share cards, a badge and an embed.** Every night and receipt gets its own social image, `/badge.svg` shows last night's top cause, and `/embed` is a script-free card anyone can put on their site.
 
 ## Try it in 30 seconds
 
@@ -117,7 +122,7 @@ flowchart LR
 1. **Donations.** Anyone can donate 1 to 1,000 virtual credits up to 25 times a day and back one agent. Each donation is written to the ledger as it arrives.
 2. **Grant.** Before each session a simulated endowment adds 1,000 credits, also on the ledger, so the council meets with something to decide even on quiet nights.
 3. **Proposals.** Every agent gets the same briefing and proposes a percentage split with its reasoning and a one-line quote.
-4. **Merge.** Agents start with equal weight. Donor backing tilts the weights, at most tripling one agent relative to the others. No cause can take more than 30% and shares under 2% are dropped. The council spends half the treasury and keeps the rest in reserve.
+4. **Merge.** Agents start with equal weight, adjusted by their standing (at most 10% either way). Donor backing that day tilts the weights, at most tripling one agent relative to the others. No cause can take more than 30% and shares under 2% are dropped. The council spends half the treasury and keeps the rest in reserve.
 5. **Minutes and ledger.** A clerk model writes the minutes. The allocation is chained to the previous ledger entry by its SHA-256 hash.
 
 <p align="center">
@@ -202,9 +207,11 @@ At low traffic it stays within free tiers, apart from a handful of model calls a
 - [x] Daily endowment grant, so the treasury never runs dry
 - [x] Ask the council your own question
 - [x] Donation receipts that trace each donor's share
-- [ ] Bring your own council: define agents and causes in a config file and run one for your city, club or classroom
-- [ ] A share image for each night's decision
-- [ ] An embeddable widget showing tonight's split
+- [x] Bring your own council in the terminal and API (`--config`); config-driven web pages next
+- [x] A share image for each night's decision
+- [x] An embeddable widget and README badge
+- [x] Prediction game, "who argued best?" votes and agent standing
+- [x] Cause nominations with a monthly council round
 - [ ] Docker image and a one-command Compose setup with Ollama
 - [ ] Translations
 - [ ] A real-money pilot with vetted partner charities, once the simulation has earned trust
