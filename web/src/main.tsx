@@ -124,6 +124,11 @@ function Footer() {
             <li>
               <a href="/feed.xml">Minutes feed (RSS)</a>
             </li>
+            <li>
+              <a href="https://github.com/earthwardai/earthward" target="_blank" rel="noopener" data-track="footer-github">
+                Source code (GitHub)
+              </a>
+            </li>
             {support ? (
               <li>
                 <a href={support} target="_blank" rel="noopener noreferrer" data-track="footer-coffee">
