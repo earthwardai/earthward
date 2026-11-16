@@ -37,7 +37,7 @@ export const config = {
   vapidPrivateKey: env.VAPID_PRIVATE_KEY ?? "",
   /** The weekly digest's SMTP account. Without SMTP_PASS, the digest is off and its sign-up is hidden. */
   smtp: {
-    host: env.SMTP_HOST ?? "smtp.titan.email",
+    host: env.SMTP_HOST ?? "smtpout.secureserver.net",
     port: Number(env.SMTP_PORT ?? 465),
     user: env.SMTP_USER ?? "",
     pass: env.SMTP_PASS ?? "",
@@ -64,8 +64,6 @@ export const config = {
 
   /** How many proxies in front of us append to X-Forwarded-For. */
   proxyHops: Number(env.TRUSTED_PROXY_HOPS ?? 1),
-  /** Shared with the Cloudflare transform rule that marks requests coming through Cloudflare. */
-  edgeSecret: env.EDGE_SECRET ?? "",
 
   schedulerEmail: env.SCHEDULER_SA ?? "",
   schedulerAudience: env.SCHEDULER_AUDIENCE ?? "",

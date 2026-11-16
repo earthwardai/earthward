@@ -1,4 +1,4 @@
-import { isIP } from "node:net";
+import { BlockList, isIP } from "node:net";
 import { createHmac, timingSafeEqual } from "node:crypto";
 import type { Context, MiddlewareHandler } from "hono";
 import { config } from "./config";
@@ -10,24 +10,53 @@ import { config } from "./config";
  * real address to X-Forwarded-For, so anything to the left of the trusted hops
  * can be forged by the client and is ignored.
  */
+/**
+ * Cloudflare's published edge ranges (https://www.cloudflare.com/ips/). Checked 2026-11-16; they
+ * change rarely. Only these addresses may tell us who the visitor is.
+ */
+const CLOUDFLARE = new BlockList();
+for (const cidr of [
+  "173.245.48.0/20", "103.21.244.0/22", "103.22.200.0/22", "103.31.4.0/22", "141.101.64.0/18",
+  "108.162.192.0/18", "190.93.240.0/20", "188.114.96.0/20", "197.234.240.0/22", "198.41.128.0/17",
+  "162.158.0.0/15", "104.16.0.0/13", "104.24.0.0/14", "172.64.0.0/13", "131.0.72.0/22",
+  "2400:cb00::/32", "2606:4700::/32", "2803:f800::/32", "2405:b500::/32", "2405:8100::/32",
+  "2a06:98c0::/29", "2c0f:f248::/32",
+]) {
+  const [net, bits] = cidr.split("/");
+  CLOUDFLARE.addSubnet(net, Number(bits), net.includes(":") ? "ipv6" : "ipv4");
+}
+const fromCloudflare = (ip: string) => {
+  const kind = isIP(ip);
+  return kind !== 0 && CLOUDFLARE.check(ip, kind === 6 ? "ipv6" : "ipv4");
+};
+
+let sawCloudflare = false;
+
 export function clientIp(c: Context): string {
-  // Behind Cloudflare, Google's front end sees a Cloudflare address. Cloudflare adds a secret header
-  // (a transform rule set up with the zone) and the visitor's address in CF-Connecting-IP. The
-  // address is trusted only when the secret matches, so requests that go around Cloudflare
-  // straight to Google can't claim to be anyone else.
-  if (config.edgeSecret) {
-    const edge = c.req.header("x-ew-edge");
-    const cip = c.req.header("cf-connecting-ip")?.trim();
-    if (edge && cip && safeEqual(edge, config.edgeSecret) && isIP(cip)) return cip;
-  }
   const xff = c.req.header("x-forwarded-for");
+  let peer: string | undefined;
   if (xff) {
     const parts = xff.split(",").map((s) => s.trim()).filter(Boolean);
-    const pick = parts[parts.length - config.proxyHops] ?? parts[0];
-    if (pick) return pick;
+    peer = parts[parts.length - config.proxyHops] ?? parts[0];
   }
-  const incoming = (c.env as { incoming?: { socket?: { remoteAddress?: string } } } | undefined)?.incoming;
-  return incoming?.socket?.remoteAddress?.replace(/^::ffff:/, "") ?? "0.0.0.0";
+  if (!peer) {
+    const incoming = (c.env as { incoming?: { socket?: { remoteAddress?: string } } } | undefined)?.incoming;
+    peer = incoming?.socket?.remoteAddress?.replace(/^::ffff:/, "") ?? "0.0.0.0";
+  }
+  // Behind Cloudflare, Google's front end sees a Cloudflare address and Cloudflare names the visitor
+  // in CF-Connecting-IP (a header its customers can't set). Requests that go around Cloudflare
+  // arrive from some other address, so their CF-Connecting-IP is ignored.
+  if (fromCloudflare(peer)) {
+    const visitor = c.req.header("cf-connecting-ip")?.trim();
+    if (visitor && isIP(visitor)) {
+      if (!sawCloudflare) {
+        sawCloudflare = true;
+        console.log(JSON.stringify({ severity: "INFO", message: "client address: first request through Cloudflare on this instance" }));
+      }
+      return visitor;
+    }
+  }
+  return peer;
 }
 
 const derive = (label: string) => createHmac("sha256", config.appSecret).update(label).digest();
@@ -130,7 +159,7 @@ export const limiters = {
   nominate: new RateLimiter(3, 60 * 60_000),
   apiKey: new RateLimiter(3, 24 * 60 * 60_000),
   groupCreate: new RateLimiter(5, 60 * 60_000),
-  groupPledge: new RateLimiter(30, 60 * 60_000),
+  groupPledge: new RateLimiter(120, 60 * 60_000), // a whole class often shares one school IP
   groupConvene: new RateLimiter(10, 60 * 60_000),
   notify: new RateLimiter(10, 60 * 60_000),
 };

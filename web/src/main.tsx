@@ -172,6 +172,11 @@ function Footer() {
                 Follow on X
               </a>
             </li>
+            <li>
+              <a href="https://bsky.app/profile/earthwardai.com" target="_blank" rel="me noopener" data-track="footer-bluesky">
+                Follow on Bluesky
+              </a>
+            </li>
             {support ? (
               <li>
                 <a href={support} target="_blank" rel="noopener noreferrer" data-track="footer-coffee">
