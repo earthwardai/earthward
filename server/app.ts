@@ -11,13 +11,14 @@ import { AGENTS, AGENT_IDS } from "../shared/agents";
 import { CAUSES, CAUSE_IDS } from "../shared/causes";
 import { dayKey, nextSessionAt, sessionDay } from "../shared/council";
 import { computeImpact } from "../shared/impact";
-import type { ImpactResponse, LeaderRow, PredictionMe, PublicDonation, StateResponse, TrackBatch } from "../shared/types";
+import type { ArgueTally, ImpactResponse, LeaderRow, PredictionMe, PublicDonation, StateResponse, TrackBatch } from "../shared/types";
 import { config } from "./config";
 import { AskUnavailableError, askCouncil } from "./ask";
 import { runCouncil } from "./council";
 import { badgeSvg, embedHtml } from "./embed";
 import { councilImage, impactImage } from "./og";
 import { previousDay, scorePredictions, winningCauses } from "./predict";
+import { clearStanding, getStanding } from "./reputation";
 import { centroidOf, countryOf } from "./geo";
 import { clearInsights, getInsights } from "./insights";
 import { feedXml, injectPage, llmsTxt, pingIndexNow, renderRoute, type RenderedPage } from "./seo";
@@ -427,6 +428,41 @@ export function createApp(store: Store) {
     }
     c.header("Cache-Control", "public, max-age=120");
     return c.json({ rows: leaderCache.rows });
+  });
+
+  // --- Who argued best? and agent standing --------------------------------------
+
+  const VoteSchema = z.object({ agentId: z.enum(AGENT_IDS as [string, ...string[]]) });
+  const DAY = /^\d{4}-\d{2}-\d{2}$/;
+
+  app.post("/api/sessions/:day/vote", async (c) => {
+    const day = c.req.param("day");
+    if (!DAY.test(day)) return c.json({ error: "Not found" }, 404);
+    if (!limiters.argue.take(hashIp(clientIp(c)))) return c.json({ error: "Too many votes from your network. Try again later." }, 429);
+    const vidHash = visitorHash(c);
+    if (!vidHash) return c.json({ error: "Your browser is blocking local storage, so we can't count your vote." }, 400);
+    const parsed = VoteSchema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) return c.json({ error: "Pick one of the five agents." }, 400);
+    if (!(await store.getSession(day))) return c.json({ error: "The council didn't meet that night." }, 404);
+    if (!dailyCaps.argue.take()) return c.json({ error: "Voting is full for today. Come back tomorrow." }, 503);
+    const result = await store.voteArgue(day, vidHash, parsed.data.agentId);
+    if (result === "exists") return c.json({ error: "You've already voted on this night." }, 409);
+    clearStanding();
+    return c.json({ ok: true }, 201);
+  });
+
+  app.get("/api/sessions/:day/votes", async (c) => {
+    const day = c.req.param("day");
+    if (!DAY.test(day)) return c.json({ error: "Not found" }, 404);
+    const vidHash = visitorHash(c);
+    const [[tally], mine] = await Promise.all([store.argueTallies([day]), vidHash ? store.argueVote(day, vidHash) : null]);
+    c.header("Cache-Control", "private, no-store");
+    return c.json({ day, total: tally.total, counts: tally.counts, mine } satisfies ArgueTally);
+  });
+
+  app.get("/api/standing", async (c) => {
+    c.header("Cache-Control", "public, max-age=300");
+    return c.json(await getStanding(store));
   });
 
   // --- Badge and embeddable card ---------------------------------------------

@@ -54,6 +54,7 @@ export class MemoryStore implements Store {
   private predictions = new Map<string, PredictionRecord>();
   private predictors = new Map<string, PredictorRecord>();
   private scored = new Set<string>();
+  private argue = new Map<string, { day: string; agentId: string }>();
   private analytics: AnalyticsBatch[] = [];
   private stats = new Map<string, DayStats>();
   private visitors = new Set<string>();
@@ -312,5 +313,29 @@ export class MemoryStore implements Store {
     if (this.scored.has(day)) return false;
     this.scored.add(day);
     return true;
+  }
+
+  async voteArgue(day: string, vidHash: string, agentId: string) {
+    const key = `${day}_${vidHash}`;
+    if (this.argue.has(key)) return "exists" as const;
+    this.argue.set(key, { day, agentId });
+    return "created" as const;
+  }
+
+  async argueVote(day: string, vidHash: string) {
+    return this.argue.get(`${day}_${vidHash}`)?.agentId ?? null;
+  }
+
+  async argueTallies(days: string[]) {
+    return days.map((day) => {
+      const counts: Record<string, number> = {};
+      let total = 0;
+      for (const v of this.argue.values()) {
+        if (v.day !== day) continue;
+        counts[v.agentId] = (counts[v.agentId] ?? 0) + 1;
+        total += 1;
+      }
+      return { day, total, counts };
+    });
   }
 }

@@ -2680,3 +2680,61 @@ textarea.text-input {
   display: block;
   height: 100%;
 }
+
+/* --- Who argued best? -------------------------------------------------------- */
+
+.argue {
+  margin-top: 32px;
+  padding: 0;
+}
+.argue-options {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  margin-top: 16px;
+}
+.argue-option {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 6px 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--hair);
+  border-top: 3px solid var(--agent);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.argue-option:disabled {
+  cursor: default;
+}
+.argue-option:not(:disabled):hover {
+  background: var(--select-bg);
+}
+.argue-option.on {
+  background: var(--select-bg);
+  box-shadow: inset 0 0 0 1px var(--agent);
+}
+.argue-option .sigil {
+  width: 24px;
+  height: 24px;
+  color: var(--agent);
+}
+.argue-option .share {
+  color: var(--ink-2);
+}
+.argue-option .track {
+  grid-column: 1 / -1;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--hair);
+  overflow: hidden;
+}
+.argue-option .fill {
+  display: block;
+  height: 100%;
+  background: var(--agent);
+}

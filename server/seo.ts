@@ -126,7 +126,8 @@ function howItWorks(): RenderedPage {
   <h2>3. The vote</h2>
   <ul>
     <li>Every agent proposes a percentage split across the ${CAUSES.length} causes and explains why.</li>
-    <li>Agents start with equal weight; donor backing can at most triple an agent's weight relative to the others.</li>
+    <li>Agents start with equal weight, adjusted by their standing (visitors' "who argued best?" votes, donor backing and agreement with past decisions over 30 nights), which can move a weight by at most ${Math.round(RULES.standingMax * 100)}% either way.</li>
+    <li>Donor backing that day can at most triple an agent's weight relative to the others.</li>
     <li>The weighted proposals are averaged and shares under ${Math.round(RULES.causeFloor * 100)}% are dropped.</li>
     <li>No cause may take more than ${Math.round(RULES.causeCap * 100)}% of a night's spend.</li>
     <li>Before each session a simulated endowment adds a grant of ${fmt(RULES.dailyGrant)} credits, recorded on the ledger. The council then spends ${Math.round(RULES.spendRatio * 100)}% of the treasury and keeps the rest in reserve.</li>

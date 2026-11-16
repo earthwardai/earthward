@@ -344,3 +344,23 @@ describe("prediction game", () => {
     expect(Array.isArray(lb.rows)).toBe(true);
   });
 });
+
+describe("who argued best", () => {
+  it("takes one vote per visitor per night and reports the tally", async () => {
+    const { setLlm } = await import("../server/council");
+    setLlm(null);
+    const run = (await (await req("/api/admin/council", { method: "POST", ip: ADMIN_IP, headers: { cookie: await adminCookie() } })).json()) as { session: { day: string } };
+    const day = run.session.day;
+    const vote = (vid: string, agentId: string) =>
+      req(`/api/sessions/${day}/vote`, { method: "POST", ip: freshIp(), headers: { "content-type": "application/json", "x-ew-vid": vid }, body: JSON.stringify({ agentId }) });
+    expect((await vote("voter-one-111", "tide")).status).toBe(201);
+    expect((await vote("voter-one-111", "hearth")).status).toBe(409);
+    expect((await vote("voter-two-222", "nobody")).status).toBe(400);
+    expect((await req("/api/sessions/1999-01-01/vote", { method: "POST", headers: { "content-type": "application/json", "x-ew-vid": "voter-three-3" }, body: JSON.stringify({ agentId: "tide" }) })).status).toBe(404);
+    const tally = (await (await req(`/api/sessions/${day}/votes`, { headers: { "x-ew-vid": "voter-one-111" } })).json()) as { total: number; counts: Record<string, number>; mine: string };
+    expect(tally).toMatchObject({ total: 1, mine: "tide" });
+    expect(tally.counts.tide).toBe(1);
+    const standing = (await (await req("/api/standing")).json()) as { agents: Record<string, { multiplier: number }> };
+    expect(Object.keys(standing.agents)).toHaveLength(5);
+  });
+});

@@ -3,7 +3,7 @@ import { Link } from "wouter";
 import { AGENTS, agentById, type AgentId } from "../../../shared/agents";
 import { CAUSES, causeById } from "../../../shared/causes";
 import { DOMAIN_LABELS, EARTH_AI, GLOBAL_AI } from "../../../shared/content";
-import type { Insights } from "../../../shared/types";
+import type { Insights, Standing } from "../../../shared/types";
 import { Sigil } from "../components/Sigil";
 import { api, countryName, credits, longDate, useLiveState, usePageMeta } from "../lib";
 import { NotFound } from "./Pages";
@@ -113,8 +113,17 @@ export function GlobalAiPage() {
   );
 }
 
+function useStanding(): Standing | null {
+  const [s, setS] = useState<Standing | null>(null);
+  useEffect(() => {
+    api<Standing>("/api/standing").then(setS).catch(() => undefined);
+  }, []);
+  return s;
+}
+
 export function AgentPage({ id }: { id: string }) {
   const a = agentById(id);
+  const standing = useStanding()?.agents[id];
   usePageMeta(a ? `${a.name}, the AI agent for ${a.mandate.toLowerCase()}` : "Agent not found", a ? `${a.mandate}. ${a.temperament}` : undefined);
   const ins = useInsights();
   if (!a) return <NotFound />;
@@ -144,6 +153,18 @@ export function AgentPage({ id }: { id: string }) {
               <dt>Sessions</dt>
               <dd>{credits(ins!.sessions)}</dd>
             </div>
+            {standing ? (
+              <div>
+                <dt>Standing</dt>
+                <dd>{standing.multiplier === 1 ? "Even" : `${standing.multiplier > 1 ? "+" : ""}${Math.round((standing.multiplier - 1) * 1000) / 10}% weight`}</dd>
+              </div>
+            ) : null}
+            {standing ? (
+              <div>
+                <dt>"Argued best" votes</dt>
+                <dd>{credits(standing.votes)}</dd>
+              </div>
+            ) : null}
           </dl>
           {st.preferences.length ? (
             <>

@@ -162,6 +162,10 @@ export interface Store {
   getPredictor(vidHash: string): Promise<PredictorRecord | null>;
   savePredictor(p: PredictorRecord): Promise<void>;
   topPredictors(limit: number): Promise<PredictorRecord[]>;
+  /** One "who argued best?" vote per visitor per night. */
+  voteArgue(day: string, vidHash: string, agentId: string): Promise<"created" | "exists">;
+  argueVote(day: string, vidHash: string): Promise<string | null>;
+  argueTallies(days: string[]): Promise<{ day: string; total: number; counts: Record<string, number> }[]>;
   /** Claims the right to score a day's predictions. True only for the first caller. */
   claimScoring(day: string): Promise<boolean>;
   listSecurity(limit: number): Promise<SecurityEvent[]>;

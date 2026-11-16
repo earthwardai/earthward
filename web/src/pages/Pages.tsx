@@ -13,6 +13,7 @@ import { Sigil } from "../components/Sigil";
 import { api, ApiError, credits, getLedger, getSession, getSessions, longDate, usePageMeta } from "../lib";
 import { FeedbackForm } from "../components/Feedback";
 import { DebateReplay } from "../components/DebateReplay";
+import { ArgueVote } from "../components/ArgueVote";
 
 export function LedgerPage() {
   usePageMeta("The ledger", "Every Earthward donation and council decision, chained by SHA-256 hashes you can verify in your browser.");
@@ -79,6 +80,7 @@ export function SessionPage({ day }: { day: string }) {
       {session ? (
         <>
           <DebateReplay session={session} />
+          <ArgueVote day={session.day} />
           <div className="decision" style={{ marginTop: 48 }}>
             <div>
               <h2 className="decision-title">{session.title}</h2>
@@ -230,7 +232,8 @@ export function HowItWorksPage() {
       <h2>3. The vote</h2>
       <ul>
         <li>Every agent proposes a percentage split across the {CAUSES.length} causes and explains why.</li>
-        <li>Agents start with equal weight. Donor backing shifts weight toward an agent, at most tripling it relative to the others.</li>
+        <li>Agents start with equal weight, adjusted by their standing: visitors' "who argued best?" votes, donor backing and how close their past proposals came to the final decision, over the last 30 nights. Standing can move a weight by at most {Math.round(RULES.standingMax * 100)}% either way.</li>
+        <li>Donor backing that day shifts weight toward an agent, at most tripling it relative to the others.</li>
         <li>The weighted proposals are averaged. Shares under {Math.round(RULES.causeFloor * 100)}% are dropped.</li>
         <li>No cause may take more than {Math.round(RULES.causeCap * 100)}% of the night's spend.</li>
         <li>

@@ -376,4 +376,29 @@ export class FirestoreStore implements Store {
       throw err;
     }
   }
+
+  async voteArgue(day: string, vidHash: string, agentId: string) {
+    const ref = this.db.collection("argueVotes").doc(`${day}_${vidHash}`);
+    const tally = this.db.collection("argueTally").doc(day);
+    return this.db.runTransaction(async (tx) => {
+      if ((await tx.get(ref)).exists) return "exists" as const;
+      tx.set(ref, { day, vidHash, agentId, at: new Date().toISOString(), expireAt: Timestamp.fromMillis(Date.now() + 120 * DAY_MS) });
+      tx.set(tally, { day, total: FieldValue.increment(1), counts: { [safeKey(agentId)]: FieldValue.increment(1) } }, { merge: true });
+      return "created" as const;
+    });
+  }
+
+  async argueVote(day: string, vidHash: string) {
+    const snap = await this.db.collection("argueVotes").doc(`${day}_${vidHash}`).get();
+    return snap.exists ? ((snap.data() as { agentId: string }).agentId ?? null) : null;
+  }
+
+  async argueTallies(days: string[]) {
+    if (!days.length) return [];
+    const snaps = await this.db.getAll(...days.map((d) => this.db.collection("argueTally").doc(d)));
+    return snaps.map((s, i) => {
+      const d = s.data() as { total?: number; counts?: Record<string, number> } | undefined;
+      return { day: days[i], total: d?.total ?? 0, counts: d?.counts ?? {} };
+    });
+  }
 }

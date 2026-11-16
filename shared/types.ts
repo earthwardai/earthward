@@ -37,6 +37,8 @@ export interface Session {
   donations: number;
   endorsements: Partial<Record<AgentId, number>>;
   influence: Record<AgentId, number>;
+  /** Reputation multipliers applied to each agent's base weight that night (absent on older sessions). */
+  standing?: Record<AgentId, number>;
   proposals: Proposal[];
   allocations: Allocation[];
   title: string;
@@ -168,4 +170,18 @@ export interface LeaderRow {
   total: number;
   streak: number;
   best: number;
+}
+
+/** How each agent's reputation is built, for the agent pages and the rules. */
+export interface Standing {
+  sessions: number;
+  agents: Record<string, { multiplier: number; votes: number; votesShare: number; backingShare: number; consensus: number }>;
+}
+
+/** "Who argued best?" votes for one night. */
+export interface ArgueTally {
+  day: string;
+  total: number;
+  counts: Record<string, number>;
+  mine: string | null;
 }

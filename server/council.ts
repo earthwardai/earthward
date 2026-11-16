@@ -12,6 +12,7 @@ import {
 } from "../shared/council";
 import type { Session } from "../shared/types";
 import { createLlm, type Llm } from "./llm";
+import { clearStanding, getStanding, multipliers } from "./reputation";
 import { SessionExistsError, type Store } from "./store/types";
 
 let llmInstance: Llm | null | undefined;
@@ -185,7 +186,9 @@ export async function runCouncil(store: Store, day: string, now = new Date()): P
     messages,
     previous: previous[0]?.allocations ?? null,
   };
-  const weights = influence(summary.endorsements);
+  clearStanding();
+  const standing = multipliers(await getStanding(store));
+  const weights = influence(summary.endorsements, standing);
   const useModel = getLlm() !== null;
 
   // One agent at a time: slower, but stays inside small per-minute model quotas.
@@ -227,6 +230,7 @@ export async function runCouncil(store: Store, day: string, now = new Date()): P
       donations: summary.donations,
       endorsements: summary.endorsements,
       influence: weights,
+      standing,
       proposals,
       allocations,
       title: record.title,

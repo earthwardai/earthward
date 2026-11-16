@@ -97,6 +97,7 @@ export const dailyCaps = {
   /** Share images rendered from scratch (cache misses). */
   og: new DailyCap(1_500),
   predictions: new DailyCap(10_000),
+  argue: new DailyCap(10_000),
 };
 
 export const limiters = {
@@ -108,6 +109,7 @@ export const limiters = {
   contact: new RateLimiter(3, 60 * 60_000),
   ask: new RateLimiter(6, 60 * 60_000),
   predict: new RateLimiter(20, 60 * 60_000),
+  argue: new RateLimiter(30, 60 * 60_000),
 };
 
 // --- Response headers -------------------------------------------------------

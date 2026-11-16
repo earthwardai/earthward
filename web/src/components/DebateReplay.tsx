@@ -80,6 +80,9 @@ export function DebateReplay({ session }: { session: Session }) {
           ))}
         </ul>
         {backing.length ? <p className="hint">Donor backing tilted the vote toward {backing.map(([id]) => agentById(id)?.name).join(" and ")}.</p> : null}
+        {session.standing && Object.values(session.standing).some((m) => Math.abs(m - 1) > 0.001) ? (
+          <p className="hint">Standing from past nights adjusted the base weights by up to {pct(Math.max(...Object.values(session.standing).map((m) => Math.abs(m - 1))))}.</p>
+        ) : null}
       </div>
     );
   } else if (stage <= proposals.length) {

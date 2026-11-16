@@ -120,3 +120,34 @@ describe("council rules", () => {
     expect(sessionDay(justAfterMidnight, "Asia/Kolkata")).toBe("2026-11-12");
   });
 });
+
+describe("agent standing", () => {
+  it("stays neutral with little history and never moves a weight more than the cap", async () => {
+    const { computeStanding } = await import("../server/reputation");
+    const session = (day: string) =>
+      ({
+        day,
+        endorsements: { tide: 3 },
+        proposals: AGENT_IDS.map((id) => fallbackProposal(id, day)),
+        allocations: [{ causeId: "water", credits: 10, share: 0.3, units: 1 }],
+      }) as unknown as import("../shared/types").Session;
+    const two = computeStanding([session("2026-11-01"), session("2026-11-02")], [{ total: 10, counts: { tide: 10 } }]);
+    for (const id of AGENT_IDS) expect(two.agents[id].multiplier).toBe(1);
+
+    const many = computeStanding(
+      ["2026-11-01", "2026-11-02", "2026-11-03", "2026-11-04"].map(session),
+      [{ total: 100, counts: { tide: 100 } }],
+    );
+    expect(many.agents.tide.multiplier).toBeCloseTo(1 + RULES.standingMax);
+    for (const id of AGENT_IDS) {
+      expect(many.agents[id].multiplier).toBeLessThanOrEqual(1 + RULES.standingMax + 1e-9);
+      expect(many.agents[id].multiplier).toBeGreaterThanOrEqual(1 - RULES.standingMax - 1e-9);
+    }
+
+    const w = influence({}, { tide: 1.1, verdant: 0.9 });
+    expect(w.tide).toBeGreaterThan(w.kindred);
+    expect(w.verdant).toBeLessThan(w.kindred);
+    const extreme = influence({}, { tide: 5 });
+    expect(extreme.tide / extreme.kindred).toBeCloseTo(1 + RULES.standingMax);
+  });
+});

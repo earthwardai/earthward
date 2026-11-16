@@ -27,6 +27,8 @@ export const RULES = {
    * ledger like everything else. It keeps the council funded on nights with few donations.
    */
   dailyGrant: 1000,
+  /** How far reputation can move an agent's base weight, either way. */
+  standingMax: 0.1,
   /** No cause may take more than this share of the spend. */
   causeCap: 0.3,
   /** Shares below this are dropped and redistributed. */
@@ -52,10 +54,15 @@ export function normalizeShares(weights: Record<string, unknown>): Shares {
 }
 
 /** Voting weight per agent. Every agent starts equal; endorsements tilt it. */
-export function influence(endorsements: Partial<Record<AgentId, number>>): Record<AgentId, number> {
+/**
+ * Vote weights for one night. Every agent starts equal, adjusted by its standing (a reputation
+ * multiplier within plus or minus RULES.standingMax), then tilted toward agents donors backed that day.
+ */
+export function influence(endorsements: Partial<Record<AgentId, number>>, standing: Partial<Record<AgentId, number>> = {}): Record<AgentId, number> {
   const total = AGENT_IDS.reduce((s, id) => s + (endorsements[id] ?? 0), 0);
+  const clampStanding = (x: number | undefined) => Math.min(1 + RULES.standingMax, Math.max(1 - RULES.standingMax, x ?? 1));
   const raw = Object.fromEntries(
-    AGENT_IDS.map((id) => [id, 1 + (total > 0 ? (RULES.endorsementBoost * (endorsements[id] ?? 0)) / total : 0)]),
+    AGENT_IDS.map((id) => [id, clampStanding(standing[id]) * (1 + (total > 0 ? (RULES.endorsementBoost * (endorsements[id] ?? 0)) / total : 0))]),
   ) as Record<AgentId, number>;
   const sum = AGENT_IDS.reduce((s, id) => s + raw[id], 0);
   for (const id of AGENT_IDS) raw[id] = raw[id] / sum;
