@@ -12,6 +12,7 @@ import { Share } from "../components/Share";
 import { Sigil } from "../components/Sigil";
 import { api, ApiError, credits, getLedger, getSession, getSessions, longDate, usePageMeta } from "../lib";
 import { FeedbackForm } from "../components/Feedback";
+import { DebateReplay } from "../components/DebateReplay";
 
 export function LedgerPage() {
   usePageMeta("The ledger", "Every Earthward donation and council decision, chained by SHA-256 hashes you can verify in your browser.");
@@ -77,6 +78,7 @@ export function SessionPage({ day }: { day: string }) {
       {error ? <p className="empty">{error}</p> : null}
       {session ? (
         <>
+          <DebateReplay session={session} />
           <div className="decision" style={{ marginTop: 48 }}>
             <div>
               <h2 className="decision-title">{session.title}</h2>
@@ -91,7 +93,7 @@ export function SessionPage({ day }: { day: string }) {
                   <dd>{credits(session.spent)}</dd>
                 </div>
                 <div>
-                  <dt>Rolled over</dt>
+                  <dt>Kept in reserve</dt>
                   <dd>{credits(session.reserve)}</dd>
                 </div>
                 <div>
@@ -307,6 +309,7 @@ export function AboutPage() {
           ))}
         </section>
       ))}
+      <EmbedSection />
       <div className="session-nav" style={{ marginTop: 32 }}>
         <Link className="btn" href="/contact">
           Get in touch
@@ -316,5 +319,48 @@ export function AboutPage() {
         </Link>
       </div>
     </main>
+  );
+}
+
+const EMBED_SNIPPETS = [
+  {
+    label: "A card for your site or newsletter",
+    code: '<iframe src="https://earthwardai.com/embed" width="380" height="330" style="border:0" title="Earthward AI council: last night\'s decision" loading="lazy"></iframe>',
+  },
+  {
+    label: "Light version",
+    code: '<iframe src="https://earthwardai.com/embed?theme=light" width="380" height="330" style="border:0" title="Earthward AI council: last night\'s decision" loading="lazy"></iframe>',
+  },
+  { label: "A badge for a README", code: "[![Earthward AI council](https://earthwardai.com/badge.svg)](https://earthwardai.com)" },
+];
+
+function EmbedSection() {
+  const [copied, setCopied] = useState<number | null>(null);
+  return (
+    <section id="embed" style={{ width: "auto", padding: 0 }}>
+      <h2>Embed the council</h2>
+      <p>Show last night's decision on your own site, blog or README. It updates itself after every session.</p>
+      <p>
+        <img src="/badge.svg" alt="Earthward AI council badge showing last night's top cause" height={20} />
+      </p>
+      {EMBED_SNIPPETS.map((s, i) => (
+        <div key={s.label} className="snippet">
+          <p className="field-label">{s.label}</p>
+          <pre>
+            <code>{s.code}</code>
+          </pre>
+          <button
+            type="button"
+            className="btn ghost small"
+            data-track="embed-copy"
+            onClick={() => {
+              void navigator.clipboard?.writeText(s.code).then(() => setCopied(i));
+            }}
+          >
+            {copied === i ? "Copied" : "Copy"}
+          </button>
+        </div>
+      ))}
+    </section>
   );
 }

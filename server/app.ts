@@ -15,6 +15,7 @@ import type { ImpactResponse, PublicDonation, StateResponse, TrackBatch } from "
 import { config } from "./config";
 import { AskUnavailableError, askCouncil } from "./ask";
 import { runCouncil } from "./council";
+import { badgeSvg, embedHtml } from "./embed";
 import { councilImage, impactImage } from "./og";
 import { centroidOf, countryOf } from "./geo";
 import { clearInsights, getInsights } from "./insights";
@@ -364,6 +365,25 @@ export function createApp(store: Store) {
     }
   });
 
+  // --- Badge and embeddable card ---------------------------------------------
+
+  let latestCache: { at: number; session: Awaited<ReturnType<Store["listSessions"]>>[number] | null } = { at: 0, session: null };
+  const latestSession = async () => {
+    if (Date.now() - latestCache.at > 10 * 60_000) latestCache = { at: Date.now(), session: (await store.listSessions(1))[0] ?? null };
+    return latestCache.session;
+  };
+
+  app.get("/badge.svg", async (c) => {
+    c.header("Content-Type", "image/svg+xml; charset=utf-8");
+    c.header("Cache-Control", "public, max-age=900");
+    return c.body(badgeSvg(await latestSession()));
+  });
+
+  app.get("/embed", async (c) => {
+    c.header("Cache-Control", "public, max-age=600");
+    return c.html(embedHtml(await latestSession(), c.req.query("theme") === "light" ? "light" : "dark"));
+  });
+
   // --- Share images ----------------------------------------------------------
 
   const ogCache = new Map<string, Buffer>();
@@ -549,6 +569,7 @@ export function createApp(store: Store) {
     await store.ensureGenesis(config.genesisCredits);
     const result = await runCouncil(store, sessionDay(new Date(), config.timeZone));
     stateCache = null;
+    latestCache = { at: 0, session: null };
     pageCache.clear();
     clearInsights();
     if (result.status === "created") void pingIndexNow(["/", `/council/${result.session.day}`, "/ledger", "/earth-ai", "/global-ai-council"]);
@@ -616,6 +637,7 @@ export function createApp(store: Store) {
     const day = dayKey(new Date(), config.timeZone);
     const result = await runCouncil(store, day);
     stateCache = null;
+    latestCache = { at: 0, session: null };
     pageCache.clear();
     clearInsights();
     if (result.status === "created") void pingIndexNow(["/", `/council/${result.session.day}`, "/ledger", "/earth-ai", "/global-ai-council"]);

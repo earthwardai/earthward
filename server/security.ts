@@ -126,17 +126,22 @@ const CSP = [
   "upgrade-insecure-requests",
 ].join("; ");
 
+// The embeddable card is the one page other sites may frame. It has no scripts at all.
+const EMBED_CSP = CSP.replace("frame-ancestors 'none'", "frame-ancestors *").replace("script-src 'self'", "script-src 'none'");
+
 export const securityHeaders: MiddlewareHandler = async (c, next) => {
   await next();
   const h = c.res.headers;
-  h.set("Content-Security-Policy", CSP);
+  const embeddable = c.req.path === "/embed";
+  h.set("Content-Security-Policy", embeddable ? EMBED_CSP : CSP);
   h.set("Strict-Transport-Security", "max-age=31536000");
   h.set("X-Content-Type-Options", "nosniff");
-  h.set("X-Frame-Options", "DENY");
+  if (!embeddable) h.set("X-Frame-Options", "DENY");
   h.set("Referrer-Policy", "strict-origin-when-cross-origin");
   h.set("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=(), usb=()");
   h.set("Cross-Origin-Opener-Policy", "same-origin");
-  h.set("Cross-Origin-Resource-Policy", "same-origin");
+  // Badges and share images are fetched by other sites (GitHub, social networks).
+  h.set("Cross-Origin-Resource-Policy", embeddable || /^\/(badge\.svg|og\/)/.test(c.req.path) ? "cross-origin" : "same-origin");
   h.delete("X-Powered-By");
 };
 

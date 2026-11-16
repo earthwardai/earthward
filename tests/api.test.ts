@@ -284,3 +284,22 @@ describe("share images", () => {
     expect(page).toContain(`/og/council/${run.session.day}.png`);
   });
 });
+
+describe("badge and embed", () => {
+  it("serves an SVG badge and a frameable card, while other pages stay unframeable", async () => {
+    const badge = await req("/badge.svg");
+    expect(badge.headers.get("content-type")).toContain("image/svg+xml");
+    expect(await badge.text()).toContain("Earthward AI council");
+
+    const embed = await req("/embed?theme=light");
+    expect(embed.status).toBe(200);
+    expect(embed.headers.get("x-frame-options")).toBeNull();
+    expect(embed.headers.get("content-security-policy")).toContain("frame-ancestors *");
+    expect(embed.headers.get("content-security-policy")).toContain("script-src 'none'");
+    expect(await embed.text()).toContain('class="light"');
+
+    const state = await req("/api/state");
+    expect(state.headers.get("x-frame-options")).toBe("DENY");
+    expect(state.headers.get("content-security-policy")).toContain("frame-ancestors 'none'");
+  });
+});

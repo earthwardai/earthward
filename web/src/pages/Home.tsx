@@ -76,8 +76,12 @@ export function Home() {
               ))}
             </ul>
             <p style={{ margin: "14px 0 0", fontSize: 14 }}>
+              <Link href={`/council/${session.day}#replay`} data-track="hero-replay">
+                Watch the debate
+              </Link>
+              {" or "}
               <Link href={`/council/${session.day}`} data-track="hero-minutes">
-                Read the minutes
+                read the minutes
               </Link>
             </p>
           </section>

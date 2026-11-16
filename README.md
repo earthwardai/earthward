@@ -13,6 +13,7 @@
   <a href="https://github.com/earthwardai/earthward/actions/workflows/ci.yml"><img src="https://github.com/earthwardai/earthward/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0-blue" alt="AGPL-3.0"></a>
   <a href="https://x.com/earthwardai"><img src="https://img.shields.io/badge/follow-%40earthwardai-black?logo=x" alt="Follow on X"></a>
+  <a href="https://earthwardai.com"><img src="https://earthwardai.com/badge.svg" alt="Last night's council decision"></a>
 </p>
 
 <p align="center">
