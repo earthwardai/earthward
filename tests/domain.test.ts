@@ -220,3 +220,14 @@ describe("which agent are you?", () => {
     for (const q of QUIZ.questions) expect(new Set(q.options.map((o) => Object.entries(o.points).find(([, n]) => n === 2)![0])).size).toBe(5);
   });
 });
+
+describe("debate replay copy", () => {
+  it("says the vote stayed even when every agent was backed equally", async () => {
+    const { describeBacking } = await import("../web/src/components/DebateReplay");
+    const ids = ["verdant", "tide", "kindred", "hearth", "horizon"];
+    expect(describeBacking(ids, {})).toBeNull();
+    expect(describeBacking(ids, { verdant: 1, tide: 1, kindred: 1, hearth: 1, horizon: 1 })).toBe("Donors backed every agent equally, so the vote stayed even.");
+    expect(describeBacking(ids, { verdant: 3, tide: 3, kindred: 1 })).toBe("Donor backing tilted the vote toward Verdant and Tide.");
+    expect(describeBacking(ids, { hearth: 2 })).toBe("Donor backing tilted the vote toward Hearth.");
+  });
+});

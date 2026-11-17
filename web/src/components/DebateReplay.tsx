@@ -32,6 +32,17 @@ const agentColor = (id: string) => `var(--${id})`;
 const causeColor = (causeId: string) => `var(--${causeById(causeId)?.domain ?? "gold"})`;
 
 /** Plays one council night as a short sequence: convene, five speeches, the merge, the decision. */
+/** One line on how donor backing moved the vote, or null when nobody backed an agent. */
+export function describeBacking(agentIds: string[], endorsements: Partial<Record<string, number>>): string | null {
+  const counts = agentIds.map((id) => [id, endorsements[id] ?? 0] as const);
+  const max = Math.max(0, ...counts.map(([, n]) => n));
+  if (max === 0) return null;
+  if (counts.every(([, n]) => n === max)) return "Donors backed every agent equally, so the vote stayed even.";
+  const names = counts.filter(([, n]) => n === max).map(([id]) => agentById(id)?.name ?? id);
+  const list = names.length > 1 ? `${names.slice(0, -1).join(", ")} and ${names.at(-1)}` : names[0];
+  return `Donor backing tilted the vote toward ${list}.`;
+}
+
 export function DebateReplay({ session }: { session: Session }) {
   const reduced = useReducedMotion();
   const proposals = session.proposals;
@@ -59,7 +70,7 @@ export function DebateReplay({ session }: { session: Session }) {
     setPlaying(true);
   };
 
-  const backing = Object.entries(session.endorsements ?? {}).filter(([, n]) => (n ?? 0) > 0);
+  const backingNote = describeBacking(proposals.map((p) => p.agentId), session.endorsements ?? {});
   let body: ReactNode;
   if (stage === 0) {
     body = (
@@ -79,7 +90,7 @@ export function DebateReplay({ session }: { session: Session }) {
             </li>
           ))}
         </ul>
-        {backing.length ? <p className="hint">Donor backing tilted the vote toward {backing.map(([id]) => agentById(id)?.name).join(" and ")}.</p> : null}
+        {backingNote ? <p className="hint">{backingNote}</p> : null}
         {session.standing && Object.values(session.standing).some((m) => Math.abs(m - 1) > 0.001) ? (
           <p className="hint">Standing from past nights adjusted the base weights by up to {pct(Math.max(...Object.values(session.standing).map((m) => Math.abs(m - 1))))}.</p>
         ) : null}
