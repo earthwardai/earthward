@@ -7,6 +7,8 @@ import { templateById } from "../shared/templates";
 import type { GroupCouncil, GroupPledge, GroupSession } from "../shared/types";
 import { config } from "./config";
 import { deliberate, type Context } from "./council";
+import { getCookie } from "hono/cookie";
+import { ACCOUNT_COOKIE, currentAccount, readSession } from "./accounts";
 import { cleanText, clientIp, dailyCaps, hashId, hashIp, limiters, safeEqual, stripLinks } from "./security";
 import type { GroupRecord, Store } from "./store/types";
 import { inWorld, worldOf } from "./world";
@@ -46,7 +48,7 @@ function cleanSpec(spec: CouncilSpec): CouncilSpec {
 }
 
 export function publicGroup(g: GroupRecord): GroupCouncil {
-  const { ownerHash: _o, pledgeVids: _v, ipHash: _i, ...rest } = g;
+  const { ownerHash: _o, pledgeVids: _v, ipHash: _i, ownerAccountId: _a, ...rest } = g;
   return rest;
 }
 
@@ -103,6 +105,7 @@ export function groupsApi(store: Store) {
     if (!dailyCaps.groups.take()) return c.json({ error: "We've set up all the councils we can today. Try again tomorrow." }, 503);
 
     const ownerToken = randomBytes(24).toString("base64url");
+    const account = await currentAccount(c, store);
     const group: GroupRecord = {
       id: newId(),
       name,
@@ -114,6 +117,7 @@ export function groupsApi(store: Store) {
       sessions: [],
       lastConvenedAt: null,
       ownerHash: ownerHash(ownerToken),
+      ownerAccountId: account?.id ?? null,
       pledgeVids: [],
       ipHash,
     };
@@ -121,16 +125,19 @@ export function groupsApi(store: Store) {
     return c.json({ id: group.id, ownerToken, url: `${config.siteUrl}/c/${group.id}` }, 201);
   });
 
-  const isOwner = (c: HonoContext, g: GroupRecord) => {
+  /** The owner link from the browser, or the signed-in account the council belongs to. */
+  const isOwner = async (c: HonoContext, g: GroupRecord) => {
     const token = c.req.header("x-ew-owner");
-    return Boolean(token && token.length <= 64 && safeEqual(ownerHash(token), g.ownerHash));
+    if (token && token.length <= 64 && safeEqual(ownerHash(token), g.ownerHash)) return true;
+    if (!g.ownerAccountId) return false;
+    return readSession(getCookie(c, ACCOUNT_COOKIE)) === g.ownerAccountId;
   };
 
   api.get("/:id", async (c) => {
     const g = await store.getGroup(c.req.param("id").slice(0, 16));
     if (!g) return c.json({ error: "There's no council at this link." }, 404);
     const vid = cleanText(c.req.header("x-ew-vid"), 64);
-    return c.json({ group: publicGroup(g), owner: isOwner(c, g), backed: Boolean(vid && g.pledgeVids.includes(hashId(`${g.id}:${vid}`))) });
+    return c.json({ group: publicGroup(g), owner: await isOwner(c, g), backed: Boolean(vid && g.pledgeVids.includes(hashId(`${g.id}:${vid}`))) });
   });
 
   api.post("/:id/pledge", async (c) => {
@@ -161,7 +168,7 @@ export function groupsApi(store: Store) {
     if (!limiters.groupConvene.take(ipHashOf(c))) return c.json({ error: "Too many sessions from your network. Try again later." }, 429);
     const g = await store.getGroup(c.req.param("id").slice(0, 16));
     if (!g) return c.json({ error: "There's no council at this link." }, 404);
-    if (!isOwner(c, g)) return c.json({ error: "Only the person who set up this council can convene it." }, 403);
+    if (!(await isOwner(c, g))) return c.json({ error: "Only the person who set up this council can convene it." }, 403);
     const since = g.lastConvenedAt ? Date.now() - Date.parse(g.lastConvenedAt) : Infinity;
     if (since < CONVENE_GAP_MS) return c.json({ error: `The council met a few minutes ago. It can meet again in ${Math.ceil((CONVENE_GAP_MS - since) / 60_000)} minutes.` }, 429);
     if (!dailyCaps.groupConvenes.take()) return c.json({ error: "The councils have met as often as they can today. Try again tomorrow." }, 503);

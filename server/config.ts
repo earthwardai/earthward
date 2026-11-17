@@ -35,8 +35,12 @@ export const config = {
   /** Web push. The private key comes from Secret Manager; without both, push is off. */
   vapidPublicKey: env.VAPID_PUBLIC_KEY ?? "",
   vapidPrivateKey: env.VAPID_PRIVATE_KEY ?? "",
-  /** The mailbox the site sends from. Without SMTP_PASS, every email is off and the sign-up is hidden. */
+  /**
+   * Outgoing email. Resend (RESEND_API_KEY) is used when set, otherwise the GoDaddy mailbox over SMTP
+   * (SMTP_USER and SMTP_PASS). With neither, every email is off and the sign-up forms are hidden.
+   */
   smtp: {
+    resendKey: env.RESEND_API_KEY ?? "",
     host: env.SMTP_HOST ?? "smtpout.secureserver.net",
     port: Number(env.SMTP_PORT ?? 465),
     user: env.SMTP_USER ?? "",
@@ -44,8 +48,10 @@ export const config = {
     from: env.DIGEST_FROM ?? "Earthward AI <ved@earthwardai.com>",
     /** Where feedback and questions from visitors are forwarded. */
     inbox: env.INBOX_EMAIL ?? "ved@earthwardai.com",
-    /** GoDaddy mailboxes accept only a few hundred messages a day; stay under it. */
-    dailyLimit: Number(env.EMAIL_DAILY_LIMIT ?? 300),
+    /** Messages per day across all email. Resend's free plan allows 100; GoDaddy a few hundred. */
+    dailyLimit: Number(env.EMAIL_DAILY_LIMIT ?? (env.RESEND_API_KEY ? 95 : 300)),
+    /** Of the daily allowance, this much is kept for sign-in links and messages to the team. */
+    reserve: Number(env.EMAIL_RESERVE ?? 25),
   },
   arenaModels: list(env.ARENA_MODELS ?? (env.GOOGLE_CLOUD_PROJECT ? "gemini-3.5-flash-lite" : "")),
   genesisCredits: Number(env.GENESIS_CREDITS ?? 10000),

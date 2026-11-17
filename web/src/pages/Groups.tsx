@@ -292,11 +292,10 @@ export function GroupPage({ id }: { id: string }) {
   }
 
   async function convene() {
-    if (!token) return;
     setMsg(null);
     setConvening(0);
     try {
-      await api(`/api/groups/${id}/convene`, { method: "POST", headers: { "x-ew-owner": token } });
+      await api(`/api/groups/${id}/convene`, { method: "POST", headers: token ? { "x-ew-owner": token } : {} });
       load();
       document.getElementById("latest")?.scrollIntoView({ behavior: "smooth" });
     } catch (err) {
@@ -331,7 +330,7 @@ export function GroupPage({ id }: { id: string }) {
         ) : null}
       </div>
 
-      {owner && token ? (
+      {owner ? (
         <section className="group-owner" aria-labelledby="owner-title">
           <h2 id="owner-title">You run this council</h2>
           <p className="muted">
@@ -345,13 +344,21 @@ export function GroupPage({ id }: { id: string }) {
               {speaking ? `${speaking.name} is making the case for ${speaking.mandate.toLowerCase()}…` : "The clerk is writing the minutes. This takes about half a minute in all."}
             </p>
           ) : null}
-          <details>
-            <summary>Your owner link</summary>
-            <p className="muted small">Anyone with this link can convene the council. Keep it to yourself, and use it to run the council from another device.</p>
-            <button type="button" className="btn ghost small" onClick={() => copy("owner", `${share}#owner=${token}`)}>
-              {copied === "owner" ? "Copied" : "Copy owner link"}
-            </button>
-          </details>
+          {token ? (
+            <details>
+              <summary>Your owner link</summary>
+              <p className="muted small">
+                Anyone with this link can convene the council. Keep it to yourself, or <Link href="/account">sign in</Link> to keep all your councils in one place on any device.
+              </p>
+              <button type="button" className="btn ghost small" onClick={() => copy("owner", `${share}#owner=${token}`)}>
+                {copied === "owner" ? "Copied" : "Copy owner link"}
+              </button>
+            </details>
+          ) : (
+            <p className="muted small">
+              Saved to <Link href="/account">your account</Link>, so you can run it from any device.
+            </p>
+          )}
         </section>
       ) : null}
 
@@ -360,6 +367,12 @@ export function GroupPage({ id }: { id: string }) {
       {latest ? (
         <section id="latest" aria-label="Latest session">
           <SessionView session={latest} group={group} />
+          <p className="no-print" style={{ marginTop: 16 }}>
+            <button type="button" className="btn ghost small" onClick={() => window.print()} data-track="group-print">
+              Print or save as PDF
+            </button>{" "}
+            <span className="muted small">A one-page report of this session for a class discussion or a team update.</span>
+          </p>
         </section>
       ) : null}
 

@@ -18,7 +18,9 @@ import {
   type ApiKeyRecord,
   type GroupRecord,
   type PushSubRecord,
+  type AccountRecord,
   type EmailFrequency,
+  type LoginTokenRecord,
   type SubscriberRecord,
   type PledgeResult,
   GROUP_PLEDGE_LIMIT,
@@ -71,6 +73,8 @@ export class MemoryStore implements Store {
   private groups = new Map<string, GroupRecord>();
   private pushSubs = new Map<string, PushSubRecord>();
   private subscribers = new Map<string, SubscriberRecord>();
+  private accounts = new Map<string, AccountRecord>();
+  private loginTokens = new Map<string, LoginTokenRecord>();
   private analytics: AnalyticsBatch[] = [];
   private stats = new Map<string, DayStats>();
   private visitors = new Set<string>();
@@ -481,9 +485,53 @@ export class MemoryStore implements Store {
     return [...this.subscribers.values()].find((s) => s.token === token) ?? null;
   }
 
+  async findSubscriberById(id: string) {
+    const s = this.subscribers.get(id);
+    return s ? { ...s } : null;
+  }
+
   async activateSubscriber(id: string) {
     const s = this.subscribers.get(id);
     if (s) this.subscribers.set(id, { ...s, status: "active", confirmedAt: new Date().toISOString() });
+  }
+
+  async saveLoginToken(t: LoginTokenRecord) {
+    this.loginTokens.set(t.id, { ...t });
+  }
+
+  async useLoginToken(id: string, now = new Date()) {
+    const t = this.loginTokens.get(id);
+    if (!t || t.used || Date.parse(t.expiresAt) < now.getTime()) return null;
+    t.used = true;
+    return { ...t };
+  }
+
+  async getAccount(id: string) {
+    const a = this.accounts.get(id);
+    return a ? structuredClone(a) : null;
+  }
+
+  async signIn(email: string, id: string, vidHash: string | null) {
+    const now = new Date().toISOString();
+    const a = this.accounts.get(id) ?? { id, email, createdAt: now, lastLoginAt: now, vidHashes: [] };
+    a.lastLoginAt = now;
+    if (vidHash && !a.vidHashes.includes(vidHash)) a.vidHashes = [...a.vidHashes, vidHash].slice(-10);
+    this.accounts.set(id, a);
+    return structuredClone(a);
+  }
+
+  async deleteAccount(id: string) {
+    this.accounts.delete(id);
+    for (const g of this.groups.values()) if (g.ownerAccountId === id) g.ownerAccountId = null;
+  }
+
+  async listGroupsByOwner(accountId: string, limit: number) {
+    return [...this.groups.values()].filter((g) => g.ownerAccountId === accountId).sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, limit).map((g) => structuredClone(g));
+  }
+
+  async setGroupOwner(groupId: string, accountId: string) {
+    const g = this.groups.get(groupId);
+    if (g) g.ownerAccountId = accountId;
   }
 
   async setSubscriberFrequency(id: string, frequency: EmailFrequency) {

@@ -3474,3 +3474,82 @@ textarea.text-input {
 .status-table td:last-child {
   white-space: normal;
 }
+
+/* Printed council reports: just the council and its latest session, in black on white. */
+@media print {
+  .nav,
+  .footer,
+  .skip,
+  .no-print,
+  .group-owner,
+  .group-back,
+  form,
+  dialog,
+  button {
+    display: none !important;
+  }
+  :root,
+  body {
+    background: #fff !important;
+    color: #000 !important;
+  }
+  .page {
+    padding: 0 !important;
+  }
+  a {
+    color: #000 !important;
+    text-decoration: none !important;
+  }
+  .group-session {
+    break-inside: avoid;
+  }
+}
+
+/* Plans */
+.plans {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 18px;
+  margin-top: 40px;
+}
+.plan-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: auto;
+  padding: 24px;
+  border: 1px solid var(--hair);
+  border-radius: 18px;
+}
+.plan-card.featured {
+  border-color: var(--gold);
+  background: var(--select-bg);
+}
+.plan-card ul {
+  flex: 1;
+  margin: 8px 0 16px;
+  padding-left: 18px;
+}
+.plan-card li {
+  margin-bottom: 6px;
+}
+.plan-card .btn {
+  align-self: flex-start;
+}
+.plan-price {
+  margin: 0;
+  font-family: var(--display);
+  font-size: 28px;
+  font-weight: 700;
+}
+.account-councils {
+  padding-left: 18px;
+}
+.account-councils li {
+  margin-bottom: 8px;
+}
+.btn.danger {
+  border-color: var(--danger);
+  color: var(--danger);
+  background: transparent;
+}

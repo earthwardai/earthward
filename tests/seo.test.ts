@@ -34,7 +34,9 @@ describe("pages for crawlers and answer engines", () => {
     expect(await (await get("/match")).text()).toContain("You have one free Saturday to help.");
     expect(await (await get("/press")).text()).toContain("ved@earthwardai.com");
     const sitemap = await (await get("/sitemap.xml")).text();
-    for (const u of ["/classroom", "/match", "/changelog", "/press"]) expect(sitemap).toContain(`https://earthwardai.com${u}</loc>`);
+    for (const u of ["/classroom", "/match", "/changelog", "/press", "/plans"]) expect(sitemap).toContain(`https://earthwardai.com${u}</loc>`);
+    expect(await (await get("/plans")).text()).toContain("Free pilot");
+    expect(await (await get("/account")).text()).toContain('content="noindex');
   });
 
   it("serves Spanish and Hindi pages that point at each other", async () => {

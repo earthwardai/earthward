@@ -1,4 +1,4 @@
-import { CHANGELOG, CLASSROOM, PRESS, QUIZ } from "../shared/product";
+import { CHANGELOG, CLASSROOM, PLANS, PRESS, QUIZ } from "../shared/product";
 import { AGENTS, agentById } from "../shared/agents";
 import { CAUSES, causeById } from "../shared/causes";
 import { ABOUT, ALT_NAMES, ASK, DEFINITION, DOMAIN_LABELS, EARTH_AI, GLOBAL_AI, HEADLINE, SITE_NAME, SUMMARY, faq } from "../shared/content";
@@ -469,6 +469,29 @@ export async function renderRoute(store: Store, path: string): Promise<RenderedP
       body: `<main class="page prose"><h1>${esc(PRESS.title)}</h1><p class="lede">${esc(PRESS.lede)}</p><h2>In one line</h2><p>${esc(PRESS.oneLiner)}</p><h2>In a paragraph</h2><p>${esc(PRESS.boilerplate)}</p><dl>${PRESS.facts.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join("")}</dl><p>Contact: ${esc(PRESS.contact)}</p></main>`,
       jsonLd: [ORG(), crumbs(["Press kit", "/press"])],
     };
+  if (path === "/plans")
+    return {
+      status: 200,
+      path,
+      title: `Plans for schools and organisations | ${SITE_NAME}`,
+      description: PLANS.lede,
+      body: `<main class="page prose"><h1>${esc(PLANS.title)}</h1><p class="lede">${esc(PLANS.lede)}</p>${PLANS.plans.map((p) => `<h2>${esc(p.name)}: ${esc(p.price)}</h2><p>${esc(p.for)}</p><ul>${p.features.map((f) => `<li>${esc(f)}</li>`).join("")}</ul>`).join("")}</main>`,
+      jsonLd: [
+        ORG(),
+        crumbs(["Plans", "/plans"]),
+        { "@type": "FAQPage", mainEntity: PLANS.faq.map((f) => ({ "@type": "Question", name: f.q, acceptedAnswer: { "@type": "Answer", text: f.a } })) },
+      ],
+    };
+  if (path === "/signin" || path === "/account")
+    return {
+      status: 200,
+      path,
+      noindex: true,
+      title: `${path === "/signin" ? "Sign in" : "Your account"} | ${SITE_NAME}`,
+      description: "Sign in to Earthward AI with a link sent to your email.",
+      body: `<main class="page prose"><h1>${path === "/signin" ? "Sign in" : "Your account"}</h1></main>`,
+      jsonLd: [ORG()],
+    };
   if (path === "/status")
     return {
       status: 200,
@@ -570,6 +593,7 @@ ${SITE_NAME} runs at ${u}. The council meets every night at 00:05 India Standard
 - [Developers](${u}/developers): free JSON API. Read with no key: ${u}/api/v1/sessions/latest, ${u}/api/v1/council, ${u}/api/v1/ledger. OpenAPI: ${u}/api/v1/openapi.json.
 - [Run your own council](${u}/councils): a council for a class, team or neighbourhood, from a shareable link.
 - [For classrooms](${u}/classroom): a free 45-minute lesson plan on AI, values and fair decisions.
+- [Plans](${u}/plans): free public council, a free school pilot, and custom councils for organisations.
 - [Which agent are you?](${u}/match): a one-minute quiz matching you to one of the five agents.
 - [What's new](${u}/changelog), [Status](${u}/status), [Press kit](${u}/press).
 

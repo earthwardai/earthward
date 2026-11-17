@@ -98,6 +98,16 @@ export interface Release {
 
 export const CHANGELOG: Release[] = [
   {
+    date: "2026-11-17",
+    title: "Accounts, plans and a faster home page",
+    items: [
+      "Sign in with a link sent to your email, no password. Your group councils, predictions and email settings follow you to any device.",
+      "Plans for schools and organisations, including a free school pilot for the 2026 to 2027 school year.",
+      "Print or save a report of any group council session as a PDF.",
+      "The home page loads much faster on phones, and works better with screen readers.",
+    ],
+  },
+  {
     date: "2026-11-16",
     title: "Email, a deciding vote, and a quiz",
     items: [
@@ -198,4 +208,76 @@ export const PRESS = {
     { label: "Share image, 1200 × 630", href: "/brand/og.jpg" },
   ],
   contact: "ved@earthwardai.com",
+};
+
+// --- Plans -----------------------------------------------------------------------
+
+export interface Plan {
+  id: "public" | "school" | "organization";
+  name: string;
+  price: string;
+  priceNote: string;
+  for: string;
+  features: string[];
+  cta: string;
+}
+
+export const PLANS: { title: string; lede: string; plans: Plan[]; faq: { q: string; a: string }[] } = {
+  title: "Plans",
+  lede: "The public council is free for everyone. Schools and organisations can run their own councils with their own agents, causes and people, and we help them set it up.",
+  plans: [
+    {
+      id: "public",
+      name: "Public",
+      price: "Free",
+      priceNote: "always",
+      for: "Anyone who wants to watch, back an agent or play along.",
+      features: [
+        "The nightly council, every debate and the public ledger",
+        "Back agents, predict tonight's top cause, ask the council",
+        "Run a council for a group from a link",
+        "Nightly or weekly email, and notifications",
+        "Open API and open source code",
+      ],
+      cta: "Start now",
+    },
+    {
+      id: "school",
+      name: "Schools",
+      price: "Free pilot",
+      priceNote: "for the 2026 to 2027 school year",
+      for: "Teachers running lessons on AI, ethics, civics or economics.",
+      features: [
+        "A teacher account that keeps every class council in one place",
+        "Classroom template, or your own agents and causes",
+        "Students join from a link, with no accounts or emails",
+        "A printable report of each session for the discussion",
+        "A ready-made 45-minute lesson plan",
+        "Help from us setting up your first council",
+      ],
+      cta: "Join the school pilot",
+    },
+    {
+      id: "organization",
+      name: "Organisations",
+      price: "Custom",
+      priceNote: "priced with you",
+      for: "Giving circles, CSR committees, foundations and team offsites.",
+      features: [
+        "Agents built around your values and your real charity partners",
+        "Councils that only people with the link can see",
+        "Owners manage every council from their account",
+        "Session reports to share with leadership or members",
+        "Model choice, including running on your own infrastructure",
+        "Priority support while you run it",
+      ],
+      cta: "Talk to us",
+    },
+  ],
+  faq: [
+    { q: "Does any real money move?", a: "Not through us. Councils split credits. When a group wants to give for real, each cause links to an established charity and you donate there directly." },
+    { q: "What happens after the school pilot?", a: "Schools in the pilot keep free access for the rest of the school year. We'll agree any pricing with you well before it ends, and the public council stays free." },
+    { q: "Can we use our own causes and charities?", a: "Yes. Define your own agents and causes, or tell us your partners and we'll set the council up with you." },
+    { q: "Where does our data go?", a: "Councils run on Google Cloud. Group members aren't asked for names or emails. Read the privacy page for the details." },
+  ],
 };

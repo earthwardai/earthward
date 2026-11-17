@@ -19,7 +19,7 @@ import type { EmailFrequency, PushSubRecord, Store, SubscriberRecord } from "./s
 
 const sha = (s: string) => createHash("sha256").update(s).digest("hex");
 export const pushEnabled = () => Boolean(config.vapidPublicKey && config.vapidPrivateKey);
-export const emailEnabled = () => Boolean(config.smtp.user && config.smtp.pass);
+export const emailEnabled = () => Boolean(config.smtp.resendKey || (config.smtp.user && config.smtp.pass));
 
 // Push endpoints come from the browser, and the server later POSTs to them. Only the real push
 // services are accepted, so a forged subscription can't point the server at anything else.
@@ -83,42 +83,89 @@ export async function pushNightly(store: Store, session: Session): Promise<numbe
 
 // --- Email -------------------------------------------------------------------
 
-let transport: ReturnType<typeof nodemailer.createTransport> | null = null;
+export interface Mail {
+  from?: string;
+  to: string;
+  subject: string;
+  text: string;
+  html?: string;
+  replyTo?: string;
+  headers?: Record<string, string>;
+}
+interface MailTransport {
+  sendMail(mail: Mail): Promise<unknown>;
+}
+
+/** Resend's HTTP API (https://resend.com/docs/api-reference/emails/send-email). */
+function resendTransport(key: string): MailTransport {
+  let last = 0;
+  return {
+    async sendMail(m) {
+      // The free plan allows two requests a second.
+      const wait = last + 550 - Date.now();
+      if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+      last = Date.now();
+      const res = await fetch("https://api.resend.com/emails", {
+        method: "POST",
+        headers: { authorization: `Bearer ${key}`, "content-type": "application/json" },
+        body: JSON.stringify({ from: m.from, to: [m.to], subject: m.subject, text: m.text, html: m.html, reply_to: m.replyTo, headers: m.headers }),
+      });
+      if (!res.ok) throw new Error(`resend ${res.status}: ${(await res.text()).slice(0, 200)}`);
+      return res.json();
+    },
+  };
+}
+
+let transport: MailTransport | null = null;
 /** Tests swap in a transport that records messages instead of sending them. */
-export function setMailTransport(t: ReturnType<typeof nodemailer.createTransport> | null) {
+export function setMailTransport(t: MailTransport | null) {
   transport = t;
 }
-function mailer() {
-  transport ??= nodemailer.createTransport({
-    host: config.smtp.host,
-    port: config.smtp.port,
-    secure: config.smtp.port === 465,
-    auth: { user: config.smtp.user, pass: config.smtp.pass },
-    pool: true,
-    maxConnections: 2,
-    rateDelta: 1000,
-    rateLimit: 5,
-  });
+function mailer(): MailTransport {
+  transport ??= config.smtp.resendKey
+    ? resendTransport(config.smtp.resendKey)
+    : nodemailer.createTransport({
+        host: config.smtp.host,
+        port: config.smtp.port,
+        secure: config.smtp.port === 465,
+        auth: { user: config.smtp.user, pass: config.smtp.pass },
+        pool: true,
+        maxConnections: 2,
+        rateDelta: 1000,
+        rateLimit: 5,
+      });
   return transport;
 }
 
-type Mail = Parameters<ReturnType<typeof nodemailer.createTransport>["sendMail"]>[0];
-const mailBudget = new DailyCap(config.smtp.dailyLimit);
+let budgetDay = "";
+let sentToday = 0;
+/** Whether one more message fits today. Bulk mail stops early so sign-in links and team notices still go out. */
+function withinBudget(bulk: boolean): boolean {
+  const day = new Date().toISOString().slice(0, 10);
+  if (day !== budgetDay) {
+    budgetDay = day;
+    sentToday = 0;
+  }
+  const limit = bulk ? config.smtp.dailyLimit - config.smtp.reserve : config.smtp.dailyLimit;
+  if (sentToday >= limit) return false;
+  sentToday += 1;
+  return true;
+}
 
-/** Sends one email within the mailbox's daily allowance. False when email is off or the allowance is spent. */
-async function send(mail: Mail): Promise<boolean> {
+/** Sends one email within the daily allowance. False when email is off or the allowance is spent. */
+export async function send(mail: Mail, opts: { bulk?: boolean } = {}): Promise<boolean> {
   if (!emailEnabled()) return false;
-  if (!mailBudget.take()) {
-    console.warn("email skipped: daily sending limit reached");
+  if (!withinBudget(Boolean(opts.bulk))) {
+    console.warn(`email skipped: daily ${opts.bulk ? "bulk " : ""}sending limit reached`);
     return false;
   }
   await mailer().sendMail({ from: config.smtp.from, ...mail });
   return true;
 }
 
-const esc = (s: string) => s.replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[ch]!);
+export const esc = (s: string) => s.replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[ch]!);
 
-function layout(body: string, manage?: string) {
+export function layout(body: string, manage?: string) {
   return `<!doctype html><html><body style="margin:0;background:#f6f4ef;font-family:-apple-system,Segoe UI,Helvetica,Arial,sans-serif;color:#1d1b17;line-height:1.5">
 <div style="max-width:560px;margin:0 auto;padding:32px 24px">
 <p style="margin:0 0 24px;font-size:20px;font-weight:700">Earthward AI</p>
@@ -129,7 +176,7 @@ ${body}
 </div></body></html>`;
 }
 
-const button = (href: string, label: string) =>
+export const button = (href: string, label: string) =>
   `<p style="margin:24px 0"><a href="${href}" style="display:inline-block;padding:12px 20px;border-radius:999px;background:#8c7148;color:#fff;text-decoration:none;font-weight:600">${esc(label)}</a></p>`;
 
 const manageUrl = (sub: SubscriberRecord) => `${config.siteUrl}/digest?manage=${sub.token}`;
@@ -196,7 +243,7 @@ export async function sendNightlyEmails(store: Store, session: Session): Promise
     const pred = sub.vidHash ? await store.getPrediction(session.day, sub.vidHash).catch(() => null) : null;
     const content = nightlyContent(session, pred?.causeId ?? null);
     try {
-      if (!(await send({ to: sub.email, subject: content.subject, text: `${content.text}\n\nManage or unsubscribe: ${manageUrl(sub)}`, html: layout(content.html, manageUrl(sub)), headers: listHeaders(sub) }))) break;
+      if (!(await send({ to: sub.email, subject: content.subject, text: `${content.text}\n\nManage or unsubscribe: ${manageUrl(sub)}`, html: layout(content.html, manageUrl(sub)), headers: listHeaders(sub) }, { bulk: true }))) break;
       sent += 1;
     } catch (err) {
       console.error("nightly email failed", err);
@@ -234,7 +281,7 @@ export async function sendDigest(store: Store): Promise<number> {
   let sent = 0;
   for (const sub of subs) {
     try {
-      if (!(await send({ to: sub.email, subject: content.subject, text: `${content.text}\n\nManage or unsubscribe: ${manageUrl(sub)}`, html: layout(content.html, manageUrl(sub)), headers: listHeaders(sub) }))) break;
+      if (!(await send({ to: sub.email, subject: content.subject, text: `${content.text}\n\nManage or unsubscribe: ${manageUrl(sub)}`, html: layout(content.html, manageUrl(sub)), headers: listHeaders(sub) }, { bulk: true }))) break;
       sent += 1;
     } catch (err) {
       console.error("digest send failed", err);

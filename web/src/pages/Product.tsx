@@ -1,12 +1,12 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Link } from "wouter";
 import { agentById, type AgentId } from "../../../shared/agents";
-import { CHANGELOG, CLASSROOM, PRESS, QUIZ, scoreQuiz } from "../../../shared/product";
+import { CHANGELOG, CLASSROOM, PLANS, PRESS, QUIZ, scoreQuiz, type Plan } from "../../../shared/product";
 import { openDonate } from "../components/DonateDialog";
 import { Share } from "../components/Share";
 import { Sigil } from "../components/Sigil";
 import { StayInTouch } from "../components/StayInTouch";
-import { api, countdown, longDate, useNow, usePageMeta } from "../lib";
+import { ApiError, api, countdown, longDate, useNow, usePageMeta } from "../lib";
 
 const agentStyle = (id: string) => ({ ["--agent" as string]: `var(--${id})` });
 
@@ -305,6 +305,134 @@ export function StatusPage() {
       <p>
         Something not working? <Link href="/contact">Tell us</Link>.
       </p>
+    </main>
+  );
+}
+
+// --- Plans ------------------------------------------------------------------------
+
+export function PlansPage() {
+  usePageMeta(PLANS.title, PLANS.lede);
+  const [plan, setPlan] = useState<"school" | "organization">("school");
+  const openedAt = useRef(Date.now());
+  const [form, setForm] = useState({ name: "", email: "", org: "", size: "", message: "" });
+  const [state, setState] = useState<{ s: "idle" | "busy" | "sent" | "error"; text?: string }>({ s: "idle" });
+
+  function choose(id: Plan["id"]) {
+    if (id === "public") return;
+    setPlan(id);
+    document.getElementById("enquire")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  async function submit(e: FormEvent) {
+    e.preventDefault();
+    setState({ s: "busy" });
+    const label = plan === "school" ? "School pilot" : "Organisation plan";
+    const message = [
+      `${label} enquiry`,
+      `Organisation: ${form.org || "not given"}`,
+      `Size: ${form.size || "not given"}`,
+      "",
+      form.message || "(no message)",
+    ].join("\n");
+    try {
+      await api("/api/contact", {
+        method: "POST",
+        body: JSON.stringify({ kind: "plan", page: "/plans", name: form.name || undefined, email: form.email, message, elapsed: Date.now() - openedAt.current }),
+      });
+      setState({ s: "sent" });
+    } catch (err) {
+      setState({ s: "error", text: err instanceof ApiError ? err.message : "That didn't send. Try again, or email ved@earthwardai.com." });
+    }
+  }
+
+  return (
+    <main id="main" className="page">
+      <div className="prose">
+        <h1>{PLANS.title}</h1>
+        <p className="lede">{PLANS.lede}</p>
+      </div>
+      <div className="plans">
+        {PLANS.plans.map((p) => (
+          <section key={p.id} className={`plan-card${p.id === "school" ? " featured" : ""}`} aria-labelledby={`plan-${p.id}`}>
+            <h2 id={`plan-${p.id}`} className="stay-head">
+              {p.name}
+            </h2>
+            <p className="plan-price">
+              {p.price} <span className="muted small">{p.priceNote}</span>
+            </p>
+            <p className="muted">{p.for}</p>
+            <ul>
+              {p.features.map((f) => (
+                <li key={f}>{f}</li>
+              ))}
+            </ul>
+            {p.id === "public" ? (
+              <Link className="btn ghost" href="/councils" data-track="plan-public">
+                {p.cta}
+              </Link>
+            ) : (
+              <button type="button" className={p.id === "school" ? "btn" : "btn ghost"} onClick={() => choose(p.id)} data-track={`plan-${p.id}`}>
+                {p.cta}
+              </button>
+            )}
+          </section>
+        ))}
+      </div>
+
+      <section id="enquire" className="prose" style={{ width: "auto", padding: 0, marginTop: 72 }}>
+        <h2>{plan === "school" ? "Join the school pilot" : "Talk to us about your organisation"}</h2>
+        {state.s === "sent" ? (
+          <p className="form-ok" role="status">
+            Thanks. A person from the Earthward team will email {form.email} within two working days.
+          </p>
+        ) : (
+          <form className="contact-form" onSubmit={submit}>
+            <fieldset className="chips" style={{ border: 0, padding: 0 }}>
+              <legend className="field-label">Plan</legend>
+              <label className="chip">
+                <input type="radio" name="plan" checked={plan === "school"} onChange={() => setPlan("school")} />
+                <span>School</span>
+              </label>
+              <label className="chip">
+                <input type="radio" name="plan" checked={plan === "organization"} onChange={() => setPlan("organization")} />
+                <span>Organisation</span>
+              </label>
+            </fieldset>
+            <label className="field-label" htmlFor="pl-name">
+              Your name
+            </label>
+            <input id="pl-name" className="text-input" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} autoComplete="name" />
+            <label className="field-label" htmlFor="pl-email">
+              Work email
+            </label>
+            <input id="pl-email" className="text-input" type="email" required value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} autoComplete="email" />
+            <label className="field-label" htmlFor="pl-org">
+              {plan === "school" ? "School" : "Organisation"}
+            </label>
+            <input id="pl-org" className="text-input" value={form.org} onChange={(e) => setForm({ ...form, org: e.target.value })} autoComplete="organization" />
+            <label className="field-label" htmlFor="pl-size">
+              {plan === "school" ? "How many students or classes?" : "How many people would take part?"}
+            </label>
+            <input id="pl-size" className="text-input" value={form.size} onChange={(e) => setForm({ ...form, size: e.target.value })} />
+            <label className="field-label" htmlFor="pl-msg">
+              What would you like to do with it?
+            </label>
+            <textarea id="pl-msg" className="text-input" maxLength={2500} value={form.message} onChange={(e) => setForm({ ...form, message: e.target.value })} />
+            <button type="submit" className="btn" disabled={state.s === "busy" || !form.email.includes("@")} data-track={`plan-enquire-${plan}`}>
+              Send
+            </button>
+            {state.s === "error" ? <p className="form-error">{state.text}</p> : null}
+          </form>
+        )}
+        <h2 style={{ marginTop: 56 }}>Questions</h2>
+        {PLANS.faq.map((f) => (
+          <div key={f.q}>
+            <h3>{f.q}</h3>
+            <p>{f.a}</p>
+          </div>
+        ))}
+      </section>
     </main>
   );
 }

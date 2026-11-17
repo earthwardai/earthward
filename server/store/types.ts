@@ -134,6 +134,8 @@ export interface ApiKeyRecord {
 
 export interface GroupRecord extends GroupCouncil {
   ownerHash: string;
+  /** The signed-in account that owns it, so it can be managed from any device. */
+  ownerAccountId?: string | null;
   /** Hashed visitor ids that have backed an agent since the last session. */
   pledgeVids: string[];
   ipHash: string;
@@ -164,6 +166,28 @@ export interface SubscriberRecord {
 }
 
 export type EmailFrequency = "daily" | "weekly";
+
+/** Someone who signed in with an email link. */
+export interface AccountRecord {
+  /** SHA-256 of the lowercased email, the same id the subscriber record uses. */
+  id: string;
+  email: string;
+  createdAt: string;
+  lastLoginAt: string;
+  /** Hashed visitor ids of the browsers they signed in on, so predictions follow the person. */
+  vidHashes: string[];
+}
+
+/** A one-time sign-in link. Only the hash of the token is stored. */
+export interface LoginTokenRecord {
+  id: string;
+  email: string;
+  createdAt: string;
+  expiresAt: string;
+  used: boolean;
+  /** Where to go after signing in (a path on this site). */
+  next: string | null;
+}
 
 export type PledgeResult = "ok" | "duplicate" | "full" | "missing";
 /** Members who can back an agent between two sessions of one group council. */
@@ -243,8 +267,18 @@ export interface Store {
   /** Creates or refreshes a pending subscriber. Returns the stored record (an active one stays active). */
   upsertSubscriber(sub: SubscriberRecord): Promise<SubscriberRecord>;
   findSubscriber(token: string): Promise<SubscriberRecord | null>;
+  findSubscriberById(id: string): Promise<SubscriberRecord | null>;
   activateSubscriber(id: string): Promise<void>;
   setSubscriberFrequency(id: string, frequency: EmailFrequency): Promise<void>;
+  saveLoginToken(t: LoginTokenRecord): Promise<void>;
+  /** Marks a sign-in token used and returns it, or null if it's unknown, used or expired. */
+  useLoginToken(id: string, now?: Date): Promise<LoginTokenRecord | null>;
+  getAccount(id: string): Promise<AccountRecord | null>;
+  /** Creates the account on first sign-in, records the login and remembers the browser. */
+  signIn(email: string, id: string, vidHash: string | null): Promise<AccountRecord>;
+  deleteAccount(id: string): Promise<void>;
+  listGroupsByOwner(accountId: string, limit: number): Promise<GroupRecord[]>;
+  setGroupOwner(groupId: string, accountId: string): Promise<void>;
   deleteSubscriber(id: string): Promise<void>;
   listActiveSubscribers(limit: number): Promise<SubscriberRecord[]>;
   countSubscribers(): Promise<number>;

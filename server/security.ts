@@ -144,6 +144,8 @@ export const dailyCaps = {
   /** Each session is six model calls. */
   groupConvenes: new DailyCap(100),
   notify: new DailyCap(2_000),
+  /** Sign-in links sent per instance per day. */
+  logins: new DailyCap(500),
 };
 
 export const limiters = {
@@ -162,6 +164,10 @@ export const limiters = {
   groupPledge: new RateLimiter(120, 60 * 60_000), // a whole class often shares one school IP
   groupConvene: new RateLimiter(10, 60 * 60_000),
   notify: new RateLimiter(10, 60 * 60_000),
+  login: new RateLimiter(6, 60 * 60_000),
+  /** Per email address, so the form can't be used to flood someone's inbox. */
+  loginEmail: new RateLimiter(3, 60 * 60_000),
+  lead: new RateLimiter(3, 60 * 60_000),
 };
 
 // --- Response headers -------------------------------------------------------

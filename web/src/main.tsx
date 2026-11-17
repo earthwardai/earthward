@@ -6,7 +6,8 @@ import { StrictMode, useEffect } from "react";
 import { AGENTS } from "../../shared/agents";
 import { createRoot } from "react-dom/client";
 import { Link, Route, Switch, useLocation } from "wouter";
-import { ChangelogPage, ClassroomPage, MatchPage, PressPage, StatusPage } from "./pages/Product";
+import { ChangelogPage, ClassroomPage, MatchPage, PlansPage, PressPage, StatusPage } from "./pages/Product";
+import { AccountPage, SignInPage, useMe } from "./pages/Account";
 import { DonateDialog, openDonate } from "./components/DonateDialog";
 import { ago, useLiveState, useNow, useTheme } from "./lib";
 import { AdminPage } from "./pages/Admin";
@@ -56,6 +57,20 @@ function StarButton() {
   );
 }
 
+function AccountLink({ current }: { current: (href: string) => "page" | undefined }) {
+  const me = useMe();
+  if (!me) return null;
+  return me.signedIn ? (
+    <Link className="hide-sm" href="/account" aria-current={current("/account")} data-track="nav-account">
+      Account
+    </Link>
+  ) : (
+    <Link className="hide-sm" href="/signin" aria-current={current("/signin")} data-track="nav-signin">
+      Sign in
+    </Link>
+  );
+}
+
 function Nav() {
   const [path] = useLocation();
   const current = (href: string) => (path === href ? "page" : undefined);
@@ -80,6 +95,7 @@ function Nav() {
         <Link className="hide-sm" href="/ledger" aria-current={current("/ledger")}>
           Ledger
         </Link>
+        <AccountLink current={current} />
         <StarButton />
         <ThemeToggle />
         <button type="button" className="btn small" onClick={openDonate} data-track="nav-donate">
@@ -145,6 +161,9 @@ function Footer() {
               <Link href="/classroom">For classrooms</Link>
             </li>
             <li>
+              <Link href="/plans">Plans for schools and organisations</Link>
+            </li>
+            <li>
               <Link href="/nominate">Nominate a cause</Link>
             </li>
             <li>
@@ -182,6 +201,9 @@ function Footer() {
             </li>
             <li>
               <Link href="/contact">Contact and feedback</Link>
+            </li>
+            <li>
+              <Link href="/account">Your account</Link>
             </li>
             <li>
               <Link href="/press">Press kit</Link>
@@ -278,6 +300,9 @@ function App() {
         <Route path="/classroom" component={ClassroomPage} />
         <Route path="/press" component={PressPage} />
         <Route path="/status" component={StatusPage} />
+        <Route path="/plans" component={PlansPage} />
+        <Route path="/signin" component={SignInPage} />
+        <Route path="/account" component={AccountPage} />
         <Route path="/admin" component={AdminPage} />
         <Route component={NotFound} />
       </Switch>

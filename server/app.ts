@@ -20,6 +20,7 @@ import { announceSession } from "./autopost";
 import { publicApi } from "./publicApi";
 import { groupsApi } from "./groups";
 import { FEEDBACK_KINDS } from "../shared/content";
+import { accountApi } from "./accounts";
 import { emailEnabled, notifyApi, notifyInbox, pushEnabled, pushNightly, sendDigest, sendNightlyEmails } from "./notify";
 import { badgeSvg, embedHtml } from "./embed";
 import { councilImage, impactImage } from "./og";
@@ -68,10 +69,10 @@ const DonationSchema = z.object({
   elapsed: z.number().int().min(0).max(86_400_000),
 });
 
-const KIND_LABEL: Record<string, string> = Object.fromEntries(FEEDBACK_KINDS.map((k) => [k.id, k.label]));
+const KIND_LABEL: Record<string, string> = { ...Object.fromEntries(FEEDBACK_KINDS.map((k) => [k.id, k.label])), plan: "Plan enquiry" };
 
 const ContactSchema = z.object({
-  kind: z.enum(["suggestion", "question", "feedback", "bug", "partnership"]).optional(),
+  kind: z.enum(["suggestion", "question", "feedback", "bug", "partnership", "plan"]).optional(),
   page: z.string().max(200).optional(),
   name: z.string().max(80).optional(),
   email: z.string().max(160).optional(),
@@ -184,6 +185,7 @@ export function createApp(store: Store) {
   app.route("/api/v1", publicApi(store));
   app.route("/api/groups", groupsApi(store));
   app.route("/api/notify", notifyApi(store));
+  app.route("/api/account", accountApi(store));
 
   app.get("/api/health", (c) => c.json({ status: "ok", version: config.version, startedAt }));
 
@@ -676,6 +678,7 @@ export function createApp(store: Store) {
       ["/developers", today],
       ["/councils", today],
       ["/classroom", today],
+      ["/plans", today],
       ["/match", today],
       ["/changelog", today],
       ["/press", today],

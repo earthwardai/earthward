@@ -565,6 +565,52 @@ describe("email", () => {
     expect(await store.findSubscriber(token)).toBeNull();
   });
 
+  it("signs in by email link, once, and keeps councils and email settings with the account", async () => {
+    const vidHeaders = { "content-type": "application/json", "x-ew-vid": "browser-one-1234" };
+    const r = await req("/api/account/login", { method: "POST", ip: freshIp(), headers: vidHeaders, body: JSON.stringify({ email: "Teacher@School.org", next: "/councils" }) });
+    expect(r.status).toBe(200);
+    expect(sent).toHaveLength(1);
+    expect(sent[0].to).toBe("teacher@school.org");
+    const token = /signin\?t=([A-Za-z0-9_-]+)/.exec(sent[0].text)![1];
+
+    const v = await req("/api/account/verify", { method: "POST", ip: freshIp(), headers: vidHeaders, body: JSON.stringify({ t: token }) });
+    expect(v.status).toBe(200);
+    expect(((await v.json()) as { next: string }).next).toBe("/councils");
+    const cookie = v.headers.get("set-cookie")!.split(";")[0];
+    expect(v.headers.get("set-cookie")).toContain("HttpOnly");
+    // The link works once.
+    expect((await req("/api/account/verify", { method: "POST", ip: freshIp(), headers: vidHeaders, body: JSON.stringify({ t: token }) })).status).toBe(400);
+
+    const authed = { ...vidHeaders, cookie };
+    // A council created while signed in belongs to the account and can be convened without the owner link.
+    const created = (await (await req("/api/groups", { method: "POST", ip: freshIp(), headers: authed, body: JSON.stringify({ name: "Class 7B", template: "classroom", budget: 1000 }) })).json()) as { id: string };
+    const view = (await (await req(`/api/groups/${created.id}`, { headers: { cookie } })).json()) as { owner: boolean; group: Record<string, unknown> };
+    expect(view.owner).toBe(true);
+    expect(view.group.ownerAccountId).toBeUndefined();
+
+    // One made in this browser before signing in can be claimed with its owner link.
+    const earlier = (await (await req("/api/groups", { method: "POST", ip: freshIp(), headers: vidHeaders, body: JSON.stringify({ name: "Club", template: "earth", budget: 500 }) })).json()) as { id: string; ownerToken: string };
+    const claim = await req("/api/account/councils/claim", { method: "POST", ip: freshIp(), headers: authed, body: JSON.stringify({ councils: [{ id: earlier.id, token: earlier.ownerToken }, { id: created.id, token: "x".repeat(32) }] }) });
+    expect(((await claim.json()) as { claimed: number }).claimed).toBe(1);
+
+    expect((await req("/api/account/subscription", { method: "POST", ip: freshIp(), headers: authed, body: JSON.stringify({ frequency: "daily" }) })).status).toBe(200);
+    const me = (await (await req("/api/account/me", { headers: authed })).json()) as { signedIn: boolean; email: string; councils: { name: string }[]; subscription: string };
+    expect(me).toMatchObject({ signedIn: true, email: "teacher@school.org", subscription: "daily" });
+    expect(me.councils.map((c) => c.name).sort()).toEqual(["Class 7B", "Club"]);
+
+    // Someone else's session can't convene it.
+    const other = (await (await req(`/api/groups/${created.id}`, {})).json()) as { owner: boolean };
+    expect(other.owner).toBe(false);
+
+    expect((await req("/api/account/delete", { method: "POST", ip: freshIp(), headers: authed, body: "{}" })).status).toBe(200);
+    expect(((await (await req("/api/account/me", { headers: authed })).json()) as { signedIn: boolean }).signedIn).toBe(false);
+  });
+
+  it("answers the same for any address and won't send a fourth link in an hour", async () => {
+    for (let i = 0; i < 4; i++) await req("/api/account/login", { method: "POST", ip: freshIp(), headers: { "content-type": "application/json" }, body: JSON.stringify({ email: "victim@example.com" }) });
+    expect(sent.filter((m) => m.to === "victim@example.com")).toHaveLength(3);
+  });
+
   it("forwards messages to the team inbox with the visitor as reply-to", async () => {
     const r = await json("/api/contact", { kind: "bug", name: "Asha", email: "asha@example.com", message: "The ledger page froze on my phone.", elapsed: 5000 });
     expect(r.status).toBe(201);

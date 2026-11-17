@@ -18,7 +18,9 @@ import {
   type ApiKeyRecord,
   type GroupRecord,
   type PushSubRecord,
+  type AccountRecord,
   type EmailFrequency,
+  type LoginTokenRecord,
   type SubscriberRecord,
   type PledgeResult,
   GROUP_PLEDGE_LIMIT,
@@ -561,8 +563,65 @@ export class FirestoreStore implements Store {
     return snap.empty ? null : (snap.docs[0].data() as SubscriberRecord);
   }
 
+  async findSubscriberById(id: string) {
+    const snap = await this.db.collection("subscribers").doc(id).get();
+    return snap.exists ? (snap.data() as SubscriberRecord) : null;
+  }
+
   async activateSubscriber(id: string) {
     await this.db.collection("subscribers").doc(id).update({ status: "active", confirmedAt: new Date().toISOString() });
+  }
+
+  async saveLoginToken(t: LoginTokenRecord) {
+    // Removed by the TTL policy on expireAt a day after the link stops working.
+    await this.db.collection("loginTokens").doc(t.id).set({ ...t, expireAt: Timestamp.fromMillis(Date.parse(t.expiresAt) + DAY_MS) });
+  }
+
+  async useLoginToken(id: string, now = new Date()) {
+    const ref = this.db.collection("loginTokens").doc(id);
+    return this.db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      if (!snap.exists) return null;
+      const t = snap.data() as LoginTokenRecord;
+      if (t.used || Date.parse(t.expiresAt) < now.getTime()) return null;
+      tx.update(ref, { used: true });
+      return { id: t.id, email: t.email, createdAt: t.createdAt, expiresAt: t.expiresAt, used: true, next: t.next ?? null };
+    });
+  }
+
+  async getAccount(id: string) {
+    const snap = await this.db.collection("accounts").doc(id).get();
+    return snap.exists ? (snap.data() as AccountRecord) : null;
+  }
+
+  async signIn(email: string, id: string, vidHash: string | null) {
+    const ref = this.db.collection("accounts").doc(id);
+    return this.db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      const now = new Date().toISOString();
+      const a: AccountRecord = snap.exists ? (snap.data() as AccountRecord) : { id, email, createdAt: now, lastLoginAt: now, vidHashes: [] };
+      a.lastLoginAt = now;
+      if (vidHash && !a.vidHashes.includes(vidHash)) a.vidHashes = [...a.vidHashes, vidHash].slice(-10);
+      tx.set(ref, a);
+      return a;
+    });
+  }
+
+  async deleteAccount(id: string) {
+    const owned = await this.db.collection("groups").where("ownerAccountId", "==", id).get();
+    const batch = this.db.batch();
+    for (const d of owned.docs) batch.update(d.ref, { ownerAccountId: null });
+    batch.delete(this.db.collection("accounts").doc(id));
+    await batch.commit();
+  }
+
+  async listGroupsByOwner(accountId: string, limit: number) {
+    const snap = await this.db.collection("groups").where("ownerAccountId", "==", accountId).limit(limit).get();
+    return snap.docs.map((d) => d.data() as GroupRecord).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  }
+
+  async setGroupOwner(groupId: string, accountId: string) {
+    await this.db.collection("groups").doc(groupId).update({ ownerAccountId: accountId });
   }
 
   async setSubscriberFrequency(id: string, frequency: EmailFrequency) {
