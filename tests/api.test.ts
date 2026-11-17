@@ -620,3 +620,26 @@ describe("email", () => {
     expect(sent[0].text).toContain("The ledger page froze");
   });
 });
+
+describe("email backup", () => {
+  it("sends through the backup mailbox when the primary fails", async () => {
+    const { config } = await import("../server/config");
+    const { setMailTransport, send } = await import("../server/notify");
+    const smtp = config.smtp as { user: string; pass: string };
+    smtp.user = "ved@earthwardai.com";
+    smtp.pass = "test-only";
+    const backupSent: string[] = [];
+    setMailTransport(
+      { sendMail: async () => { throw new Error("resend 429: daily quota"); } },
+      { sendMail: async (m: { subject: string }) => (backupSent.push(m.subject), {}) } as never,
+    );
+    try {
+      expect(await send({ to: "a@example.com", subject: "Hello", text: "Hi" })).toBe(true);
+      expect(backupSent).toEqual(["Hello"]);
+    } finally {
+      smtp.user = "";
+      smtp.pass = "";
+      setMailTransport(null, null);
+    }
+  });
+});

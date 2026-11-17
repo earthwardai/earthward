@@ -117,24 +117,34 @@ function resendTransport(key: string): MailTransport {
 }
 
 let transport: MailTransport | null = null;
+let backup: MailTransport | null | undefined;
 /** Tests swap in a transport that records messages instead of sending them. */
-export function setMailTransport(t: MailTransport | null) {
+export function setMailTransport(t: MailTransport | null, fallback: MailTransport | null = null) {
   transport = t;
+  backup = fallback;
 }
+const smtpConfigured = () => Boolean(config.smtp.user && config.smtp.pass);
+function smtpTransport(): MailTransport {
+  return nodemailer.createTransport({
+    host: config.smtp.host,
+    port: config.smtp.port,
+    secure: config.smtp.port === 465,
+    auth: { user: config.smtp.user, pass: config.smtp.pass },
+    pool: true,
+    maxConnections: 2,
+    rateDelta: 1000,
+    rateLimit: 5,
+  });
+}
+/** Resend when configured, otherwise the GoDaddy mailbox. */
 function mailer(): MailTransport {
-  transport ??= config.smtp.resendKey
-    ? resendTransport(config.smtp.resendKey)
-    : nodemailer.createTransport({
-        host: config.smtp.host,
-        port: config.smtp.port,
-        secure: config.smtp.port === 465,
-        auth: { user: config.smtp.user, pass: config.smtp.pass },
-        pool: true,
-        maxConnections: 2,
-        rateDelta: 1000,
-        rateLimit: 5,
-      });
+  transport ??= config.smtp.resendKey ? resendTransport(config.smtp.resendKey) : smtpTransport();
   return transport;
+}
+/** With both configured, the GoDaddy mailbox takes over when Resend fails or is over its limit. */
+function fallbackMailer(): MailTransport | null {
+  if (backup === undefined) backup = config.smtp.resendKey && smtpConfigured() ? smtpTransport() : null;
+  return backup;
 }
 
 let budgetDay = "";
@@ -159,7 +169,15 @@ export async function send(mail: Mail, opts: { bulk?: boolean } = {}): Promise<b
     console.warn(`email skipped: daily ${opts.bulk ? "bulk " : ""}sending limit reached`);
     return false;
   }
-  await mailer().sendMail({ from: config.smtp.from, ...mail });
+  const message = { from: config.smtp.from, ...mail };
+  try {
+    await mailer().sendMail(message);
+  } catch (err) {
+    const fallback = fallbackMailer();
+    if (!fallback) throw err;
+    console.warn("primary email failed, sending through the backup mailbox:", (err as Error).message.slice(0, 160));
+    await fallback.sendMail(message);
+  }
   return true;
 }
 

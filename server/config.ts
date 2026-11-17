@@ -48,8 +48,11 @@ export const config = {
     from: env.DIGEST_FROM ?? "Earthward AI <ved@earthwardai.com>",
     /** Where feedback and questions from visitors are forwarded. */
     inbox: env.INBOX_EMAIL ?? "ved@earthwardai.com",
-    /** Messages per day across all email. Resend's free plan allows 100; GoDaddy a few hundred. */
-    dailyLimit: Number(env.EMAIL_DAILY_LIMIT ?? (env.RESEND_API_KEY ? 95 : 300)),
+    /**
+     * Messages per day across all email. Resend's free plan allows 100 and GoDaddy a few hundred;
+     * with both, Resend goes first and GoDaddy picks up the rest.
+     */
+    dailyLimit: Number(env.EMAIL_DAILY_LIMIT ?? (env.RESEND_API_KEY && !env.SMTP_PASS ? 95 : 300)),
     /** Of the daily allowance, this much is kept for sign-in links and messages to the team. */
     reserve: Number(env.EMAIL_RESERVE ?? 25),
   },
