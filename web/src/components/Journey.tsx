@@ -340,7 +340,7 @@ function PinnedStory({ story, chain }: { story: Story; chain: LedgerEntry[] }) {
           ) : null}
         </div>
 
-        <div className={`chain${chapter === 4 ? " on" : ""}`} aria-hidden={chapter !== 4}>
+        <div className={`chain${chapter === 4 ? " on" : ""}`} inert={chapter !== 4}>
           <ol>
             {[...chain].reverse().map((e) => (
               <li key={e.seq}>

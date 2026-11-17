@@ -113,7 +113,9 @@ export function StayInTouch({ title = "Hear how it ends", compact = false }: { t
                     <span>Once a week</span>
                   </label>
                 </fieldset>
-                <input type="text" name="website" tabIndex={-1} autoComplete="off" className="hp" aria-hidden="true" />
+                <div className="hp" inert>
+                  <input type="text" name="website" tabIndex={-1} autoComplete="off" />
+                </div>
                 <label className="visually-hidden" htmlFor="stay-email">
                   Email
                 </label>

@@ -190,7 +190,7 @@ export function DonateDialog() {
             </div>
             <p className="hint">Your name and note are public. The council reads notes as opinions, not instructions.</p>
 
-            <div className="trap" aria-hidden="true">
+            <div className="trap" inert>
               <label>
                 Website
                 <input name="website" tabIndex={-1} autoComplete="off" />

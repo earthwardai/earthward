@@ -108,7 +108,7 @@ export function FeedbackForm({ initialKind = "feedback", compact = false, onSent
           />
         </div>
       </div>
-      <div className="trap" aria-hidden="true">
+      <div className="trap" inert>
         <label>
           Website
           <input name="website" tabIndex={-1} autoComplete="off" />

@@ -41,20 +41,17 @@ export function AllocationChart({ allocations, spent }: { allocations: Allocatio
         ))}
       </ul>
       <div className="alloc-bar-wrap">
-      <div className="alloc-bar" role="group" aria-label={`Allocation of ${credits(spent)} credits`} onMouseLeave={() => setActive(null)}>
+      {/* The bar is a picture of the table below, which carries the same numbers for keyboards and screen readers. */}
+      <div className="alloc-bar" aria-hidden="true" onMouseLeave={() => setActive(null)}>
         {ordered.map((a, i) => {
           const cause = causeById(a.causeId)!;
           return (
-            <button
+            <span
               key={a.causeId}
-              type="button"
+              className={active === i ? "seg on" : "seg"}
               style={{ ...agentColor(cause.domain), ["--share" as string]: a.share }}
-              aria-label={`${cause.name}: ${credits(a.credits)} credits, ${Math.round(a.share * 100)} percent`}
-              aria-pressed={active === i}
               data-track={`alloc:${a.causeId}`}
               onMouseEnter={() => setActive(i)}
-              onFocus={() => setActive(i)}
-              onBlur={() => setActive(null)}
               onClick={() => setActive(active === i ? null : i)}
             />
           );

@@ -932,27 +932,25 @@ h3 {
   margin: 8px 0 14px;
 }
 
-.alloc-bar button {
+.alloc-bar .seg {
+  display: block;
   flex: var(--share) 1 0;
   min-width: 3px;
-  padding: 0;
-  border: 0;
   background: var(--agent);
   cursor: pointer;
   transition: filter 140ms ease;
 }
 
-.alloc-bar button:first-child {
+.alloc-bar .seg:first-child {
   border-radius: 4px 0 0 4px;
 }
 
-.alloc-bar button:last-child {
+.alloc-bar .seg:last-child {
   border-radius: 0 4px 4px 0;
 }
 
-.alloc-bar button:hover,
-.alloc-bar button:focus-visible,
-.alloc-bar button[aria-pressed="true"] {
+.alloc-bar .seg:hover,
+.alloc-bar .seg.on {
   filter: brightness(1.25);
 }
 

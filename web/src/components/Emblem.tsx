@@ -41,6 +41,21 @@ function Apex({ draw }: { draw: boolean }) {
   );
 }
 
+/** True when WebGL runs on real graphics hardware rather than a slow software fallback. */
+function hasFastWebGL(): boolean {
+  try {
+    const probe = document.createElement("canvas");
+    const gl = probe.getContext("webgl", { failIfMajorPerformanceCaveat: true }) as WebGLRenderingContext | null;
+    if (!gl) return false;
+    const info = gl.getExtension("WEBGL_debug_renderer_info");
+    const renderer = info ? String(gl.getParameter(info.UNMASKED_RENDERER_WEBGL)) : "";
+    gl.getExtension("WEBGL_lose_context")?.loseContext();
+    return !/swiftshader|llvmpipe|softpipe|software|basic render/i.test(renderer);
+  } catch {
+    return false;
+  }
+}
+
 /** The live globe: donors in gold at country level, last night's funded places in green, arcs between. */
 function Globe({ recent, session, reduced }: { recent: PublicDonation[]; session: Session | null; reduced: boolean }) {
   const [theme] = useTheme();
@@ -52,59 +67,96 @@ function Globe({ recent, session, reduced }: { recent: PublicDonation[]; session
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    let size = canvas.offsetWidth;
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
-    let phi = 0.9;
-    let raf = 0;
-    let globe: ReturnType<typeof createGlobe>;
-    try {
-      globe = createGlobe(canvas, {
-        width: size * dpr,
-        height: size * dpr,
-        devicePixelRatio: dpr,
-        phi,
-        theta: 0.28,
-        dark: palette.dark,
-        diffuse: palette.diffuse,
-        mapSamples: 18000,
-        mapBrightness: palette.brightness,
-        mapBaseBrightness: 0.02,
-        baseColor: palette.base,
-        markerColor: palette.gold,
-        glowColor: palette.glow,
-        markers: [],
-        arcs: [],
-        arcColor: palette.gold,
-        arcWidth: 0.6,
-        arcHeight: 0.28,
-        markerElevation: 0.02,
-        opacity: 0.92,
-      });
-    } catch {
-      return; // No WebGL: the apex and the numbers still carry the hero.
-    }
-    globeRef.current = globe;
-    setReady(true);
+    let cancelled = false;
+    let stop = () => {};
 
-    const onResize = () => {
-      size = canvas.offsetWidth;
-      globe.update({ width: size * dpr, height: size * dpr });
-    };
-    window.addEventListener("resize", onResize);
+    const start = () => {
+      // Phones and laptops without graphics hardware draw WebGL in software, which freezes the page.
+      // There the apex and the numbers carry the hero on their own.
+      if (cancelled || !hasFastWebGL()) return;
+      let size = canvas.offsetWidth;
+      const small = size < 520;
+      const dpr = Math.min(window.devicePixelRatio || 1, small ? 1.5 : 2);
+      let phi = 0.9;
+      let raf = 0;
+      let frame = 0;
+      let onScreen = true;
+      let globe: ReturnType<typeof createGlobe>;
+      try {
+        globe = createGlobe(canvas, {
+          width: size * dpr,
+          height: size * dpr,
+          devicePixelRatio: dpr,
+          phi,
+          theta: 0.28,
+          dark: palette.dark,
+          diffuse: palette.diffuse,
+          mapSamples: small ? 12000 : 18000,
+          mapBrightness: palette.brightness,
+          mapBaseBrightness: 0.02,
+          baseColor: palette.base,
+          markerColor: palette.gold,
+          glowColor: palette.glow,
+          markers: [],
+          arcs: [],
+          arcColor: palette.gold,
+          arcWidth: 0.6,
+          arcHeight: 0.28,
+          markerElevation: 0.02,
+          opacity: 0.92,
+        });
+      } catch {
+        return;
+      }
+      globeRef.current = globe;
+      setReady(true);
 
-    if (!reduced) {
+      const onResize = () => {
+        size = canvas.offsetWidth;
+        globe.update({ width: size * dpr, height: size * dpr });
+      };
+      window.addEventListener("resize", onResize);
+
+      // Turns at 30 frames a second, and only while it's on screen in a visible tab.
       const tick = () => {
-        phi += 0.0016;
-        globe.update({ phi });
+        raf = 0;
+        if (!onScreen || document.hidden) return;
+        frame += 1;
+        if (frame % 2 === 0) {
+          phi += 0.0032;
+          globe.update({ phi });
+        }
         raf = requestAnimationFrame(tick);
       };
-      raf = requestAnimationFrame(tick);
-    }
+      const resume = () => {
+        if (!reduced && !raf && onScreen && !document.hidden) raf = requestAnimationFrame(tick);
+      };
+      const io = new IntersectionObserver(([entry]) => {
+        onScreen = entry.isIntersecting;
+        resume();
+      });
+      io.observe(canvas);
+      document.addEventListener("visibilitychange", resume);
+      resume();
+
+      stop = () => {
+        cancelAnimationFrame(raf);
+        io.disconnect();
+        document.removeEventListener("visibilitychange", resume);
+        window.removeEventListener("resize", onResize);
+        globe.destroy();
+        globeRef.current = null;
+      };
+    };
+
+    // Wait until the page has finished its own work before starting the globe.
+    const w = window as Window & { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number; cancelIdleCallback?: (id: number) => void };
+    const idle = w.requestIdleCallback ? w.requestIdleCallback(start, { timeout: 2500 }) : window.setTimeout(start, 1200);
     return () => {
-      cancelAnimationFrame(raf);
-      window.removeEventListener("resize", onResize);
-      globe.destroy();
-      globeRef.current = null;
+      cancelled = true;
+      if (w.cancelIdleCallback) w.cancelIdleCallback(idle);
+      else window.clearTimeout(idle);
+      stop();
     };
     // Rebuilt on theme change: cobe fixes its shading when the globe is created.
     // eslint-disable-next-line react-hooks/exhaustive-deps

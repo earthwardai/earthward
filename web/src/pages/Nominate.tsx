@@ -158,7 +158,7 @@ export function NominatePage() {
               </label>
               <input id="n-email" className="text-input" type="email" maxLength={160} autoComplete="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
             </div>
-            <div className="trap" aria-hidden="true">
+            <div className="trap" inert>
               <label>
                 Website
                 <input name="website" tabIndex={-1} autoComplete="off" />
