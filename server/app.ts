@@ -21,6 +21,7 @@ import { publicApi } from "./publicApi";
 import { groupsApi } from "./groups";
 import { FEEDBACK_KINDS } from "../shared/content";
 import { accountApi } from "./accounts";
+import { postPromo } from "./promo";
 import { emailEnabled, notifyApi, notifyInbox, pushEnabled, pushNightly, sendDigest, sendNightlyEmails } from "./notify";
 import { badgeSvg, embedHtml } from "./embed";
 import { councilImage, impactImage } from "./og";
@@ -797,6 +798,13 @@ export function createApp(store: Store) {
       return false;
     }
   }
+
+  app.post("/internal/promo", async (c) => {
+    if (!(await fromScheduler(c))) return c.json({ error: "Not found" }, 404);
+    const result = await postPromo(store).catch((err) => (console.error("promo failed", err), "failed"));
+    console.log("promo", result);
+    return c.json({ result });
+  });
 
   app.post("/internal/digest", async (c) => {
     if (!(await fromScheduler(c))) return c.json({ error: "Not found" }, 404);

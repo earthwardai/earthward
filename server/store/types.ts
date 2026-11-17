@@ -285,5 +285,7 @@ export interface Store {
   getArena(day: string): Promise<ArenaResult | null>;
   /** Claims the right to score a day's predictions. True only for the first caller. */
   claimScoring(day: string): Promise<boolean>;
+  /** True only for the first caller with this key, so a scheduled job can't do the same work twice. */
+  claimTask(key: string): Promise<boolean>;
   listSecurity(limit: number): Promise<SecurityEvent[]>;
 }

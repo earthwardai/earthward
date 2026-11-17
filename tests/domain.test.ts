@@ -231,3 +231,35 @@ describe("debate replay copy", () => {
     expect(describeBacking(ids, { hearth: 2 })).toBe("Donor backing tilted the vote toward Hearth.");
   });
 });
+
+describe("launch-week posts", () => {
+  it("posts the day's entry to Bluesky once, with linked URLs and the image", async () => {
+    const { postPromo, LAUNCH_WEEK } = await import("../server/promo");
+    const { MemoryStore } = await import("../server/store/memory");
+    process.env.BLUESKY_HANDLE = "earthwardai.com";
+    process.env.BLUESKY_APP_PASSWORD = "test-only";
+    const calls: { url: string; body?: string }[] = [];
+    const f = (async (url: string, init?: RequestInit) => {
+      calls.push({ url, body: typeof init?.body === "string" ? init.body : undefined });
+      if (url.endsWith(".jpg")) return new Response(new Uint8Array([255, 216, 255]));
+      if (url.includes("createSession")) return Response.json({ accessJwt: "jwt", did: "did:plc:x" });
+      if (url.includes("uploadBlob")) return Response.json({ blob: { ref: "b" } });
+      return Response.json({ uri: "at://x" });
+    }) as typeof fetch;
+    try {
+      const store = new MemoryStore();
+      const at = new Date("2026-11-19T12:30:00Z"); // 18:00 in India
+      expect(await postPromo(store, at, f)).toBe("posted");
+      expect(await postPromo(store, at, f)).toBe("already posted");
+      expect(await postPromo(store, new Date("2026-11-30T12:30:00Z"), f)).toBe("nothing scheduled");
+      const record = JSON.parse(calls.find((c) => c.url.includes("createRecord"))!.body!).record;
+      expect(record.text).toBe(LAUNCH_WEEK[0].text);
+      expect(record.facets[0].features[0].uri).toBe("https://earthwardai.com/match?utm_source=bluesky&utm_campaign=launchweek");
+      expect(record.embed.images[0].alt).toContain("Tide");
+      for (const p of LAUNCH_WEEK) expect([...p.text].length).toBeLessThanOrEqual(300);
+    } finally {
+      delete process.env.BLUESKY_HANDLE;
+      delete process.env.BLUESKY_APP_PASSWORD;
+    }
+  });
+});

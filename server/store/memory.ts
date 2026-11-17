@@ -329,6 +329,13 @@ export class MemoryStore implements Store {
     return [...this.predictors.values()].sort((a, b) => b.correct - a.correct || b.streak - a.streak).slice(0, limit);
   }
 
+  private tasks = new Set<string>();
+  async claimTask(key: string) {
+    if (this.tasks.has(key)) return false;
+    this.tasks.add(key);
+    return true;
+  }
+
   async claimScoring(day: string) {
     if (this.scored.has(day)) return false;
     this.scored.add(day);

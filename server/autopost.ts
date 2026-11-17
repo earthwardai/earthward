@@ -26,6 +26,40 @@ export function postText(session: Session, max = 280): string {
 
 type Fetch = typeof fetch;
 
+/** Byte ranges of links in a post, so Bluesky shows them as links. */
+export function linkFacets(text: string, utm: string) {
+  const enc = new TextEncoder();
+  const facets: { index: { byteStart: number; byteEnd: number }; features: { $type: string; uri: string }[] }[] = [];
+  for (const m of text.matchAll(/(?:https?:\/\/)?(?:earthwardai\.com|github\.com)[^\s]*/g)) {
+    const byteStart = enc.encode(text.slice(0, m.index)).length;
+    const byteEnd = byteStart + enc.encode(m[0]).length;
+    const bare = m[0].replace(/^https?:\/\//, "");
+    const uri = bare.startsWith("earthwardai.com") ? `https://${bare}${bare.includes("?") ? "&" : "?"}${utm}` : `https://${bare}`;
+    facets.push({ index: { byteStart, byteEnd }, features: [{ $type: "app.bsky.richtext.facet#link", uri }] });
+  }
+  return facets;
+}
+
+/** Posts text (with linked URLs) and an optional JPEG to the Bluesky account. */
+export async function postToBluesky(text: string, image: { bytes: Uint8Array<ArrayBuffer>; alt: string } | null, utm: string, f: Fetch = fetch): Promise<string> {
+  const handle = process.env.BLUESKY_HANDLE;
+  const password = process.env.BLUESKY_APP_PASSWORD;
+  if (!handle || !password) return "skipped";
+  const base = "https://bsky.social/xrpc";
+  const auth = await f(`${base}/com.atproto.server.createSession`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ identifier: handle, password }) });
+  if (!auth.ok) throw new Error(`bluesky login ${auth.status}`);
+  const { accessJwt, did } = (await auth.json()) as { accessJwt: string; did: string };
+  const headers = { authorization: `Bearer ${accessJwt}` };
+  const record: Record<string, unknown> = { $type: "app.bsky.feed.post", text, facets: linkFacets(text, utm), langs: ["en"], createdAt: new Date().toISOString() };
+  if (image) {
+    const up = await f(`${base}/com.atproto.repo.uploadBlob`, { method: "POST", headers: { ...headers, "content-type": "image/jpeg" }, body: image.bytes });
+    if (up.ok) record.embed = { $type: "app.bsky.embed.images", images: [{ alt: image.alt, image: ((await up.json()) as { blob: unknown }).blob }] };
+  }
+  const res = await f(`${base}/com.atproto.repo.createRecord`, { method: "POST", headers: { ...headers, "content-type": "application/json" }, body: JSON.stringify({ repo: did, collection: "app.bsky.feed.post", record }) });
+  if (!res.ok) throw new Error(`bluesky post ${res.status}`);
+  return "posted";
+}
+
 async function postBluesky(session: Session, f: Fetch) {
   const handle = process.env.BLUESKY_HANDLE;
   const password = process.env.BLUESKY_APP_PASSWORD;

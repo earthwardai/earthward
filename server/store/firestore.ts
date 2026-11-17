@@ -376,6 +376,16 @@ export class FirestoreStore implements Store {
     return snap.docs.map((d) => d.data() as PredictorRecord);
   }
 
+  async claimTask(key: string) {
+    try {
+      await this.db.collection("tasksDone").doc(key.replace(/[/]/g, "_")).create({ key, at: new Date().toISOString() });
+      return true;
+    } catch (err) {
+      if ((err as { code?: number }).code === 6) return false; // ALREADY_EXISTS
+      throw err;
+    }
+  }
+
   async claimScoring(day: string) {
     try {
       await this.db.collection("predictScored").doc(day).create({ day, at: new Date().toISOString() });
