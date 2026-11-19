@@ -643,3 +643,59 @@ describe("email backup", () => {
     }
   });
 });
+
+describe("morning report", () => {
+  type Sent = { to: string; subject: string; text: string; html?: string };
+  let sent: Sent[] = [];
+
+  beforeEach(async () => {
+    const { config } = await import("../server/config");
+    const { setMailTransport } = await import("../server/notify");
+    (config.smtp as { user: string; pass: string }).user = "ved@earthwardai.com";
+    (config.smtp as { user: string; pass: string }).pass = "test-only";
+    sent = [];
+    setMailTransport({ sendMail: async (m: Sent) => (sent.push(m), { messageId: "x" }) } as never);
+  });
+
+  afterEach(async () => {
+    const { config } = await import("../server/config");
+    const { setMailTransport } = await import("../server/notify");
+    (config.smtp as { user: string; pass: string }).user = "";
+    (config.smtp as { user: string; pass: string }).pass = "";
+    setMailTransport(null);
+    delete process.env.BLUESKY_HANDLE;
+  });
+
+  it("emails the team yesterday's numbers once a day", async () => {
+    const { sendReport } = await import("../server/report");
+    const store = new MemoryStore();
+    await store.ensureGenesis(10_000);
+    const now = new Date("2026-11-20T03:30:00Z"); // 09:00 in India; yesterday is 19 Nov
+    const inc = { views: 3, clicks: 1, paths: { "/": 2, "/match": 1 }, targets: {}, country: "IN", referrers: { "bsky.app": 1 }, campaigns: { launchweek: 1 }, human: true };
+    await store.recordAnalytics({ at: "2026-11-19T10:00:00Z" } as never, inc, "2026-11-19", "visitor-a");
+    await store.recordAnalytics({ at: "2026-11-19T11:00:00Z" } as never, inc, "2026-11-19", "visitor-b");
+    await store.upsertSubscriber({ id: "sub-1", email: "new@example.com", status: "pending", token: "t", createdAt: "2026-11-19T09:00:00Z", confirmedAt: null, frequency: "daily" });
+    await store.addMessage({ at: "2026-11-19T12:00:00Z", kind: "feedback", name: "Asha", email: "asha@example.com", message: "Love the debate replay.", ip: "x", ipHash: "x", country: "IN", ua: "x" });
+    await store.addMessage({ at: "2026-11-19T12:05:00Z", kind: "ask", name: null, email: null, message: "Should cities plant more trees?", ip: "x", ipHash: "x", country: null, ua: "x" });
+    process.env.BLUESKY_HANDLE = "earthwardai.com";
+    const f = (async (url: string) =>
+      url.includes("bsky") ? Response.json({ followersCount: 12 }) : url.includes("github") ? Response.json({ stargazers_count: 7, forks_count: 1 }) : new Response("", { status: 404 })) as typeof fetch;
+
+    expect(await sendReport(store, now, f)).toBe("sent for 2026-11-19");
+    expect(await sendReport(store, now, f)).toBe("already sent");
+    expect(sent).toHaveLength(1);
+    expect(sent[0].to).toBe("ved@earthwardai.com");
+    expect(sent[0].subject).toBe("Earthward daily, 19 Nov: 2 people, 1 new sign-up, 1 message to answer");
+    expect(sent[0].text).toContain("From: bsky.app 2");
+    expect(sent[0].text).toContain("Email subscribers: +1, 0 active");
+    expect(sent[0].text).toContain("Bluesky followers: 12");
+    expect(sent[0].text).toContain("GitHub stars: 7 (1 forks)");
+    expect(sent[0].text).toContain("feedback from Asha, asha@example.com, IN: Love the debate replay.");
+    expect(sent[0].text).toContain("Should cities plant more trees?");
+    expect(sent[0].html).not.toContain("<script");
+  });
+
+  it("is only reachable by the scheduler", async () => {
+    expect((await req("/internal/report", { method: "POST" })).status).toBe(404);
+  });
+});

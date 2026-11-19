@@ -3553,3 +3553,64 @@ textarea.text-input {
   color: var(--danger);
   background: transparent;
 }
+
+/* Product Hunt launch pill: bottom left, clear of the feedback button on the right. */
+.launch-pill {
+  position: fixed;
+  left: 20px;
+  bottom: 20px;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  max-width: calc(100% - 180px);
+  padding: 4px 4px 4px 16px;
+  border: 1px solid var(--hair);
+  border-radius: 999px;
+  background: var(--raised);
+  box-shadow: 0 6px 24px rgb(0 0 0 / 0.18);
+  font-size: 14px;
+  line-height: 1.3;
+}
+.launch-pill a {
+  color: var(--ink);
+  text-decoration: none;
+  padding: 6px 0;
+}
+.launch-pill a strong {
+  color: var(--gold);
+  font-weight: 600;
+}
+.launch-pill a:hover {
+  text-decoration: underline;
+}
+.launch-pill-close {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--ink-3);
+  font: inherit;
+  font-size: 18px;
+  cursor: pointer;
+}
+.launch-pill-close:hover,
+.launch-pill-close:focus-visible {
+  color: var(--ink);
+  background: var(--lift);
+}
+@media (max-width: 560px) {
+  .launch-pill {
+    left: 16px;
+    bottom: 16px;
+    max-width: calc(100% - 152px);
+    font-size: 13px;
+  }
+}
+@media print {
+  .launch-pill {
+    display: none;
+  }
+}

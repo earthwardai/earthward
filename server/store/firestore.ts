@@ -1,4 +1,4 @@
-import { FieldValue, Firestore, Timestamp, type DocumentReference } from "@google-cloud/firestore";
+import { FieldValue, Firestore, Timestamp, type DocumentReference, type Query } from "@google-cloud/firestore";
 import { makeEntry, type LedgerEntry } from "../../shared/ledger";
 import type { ArenaResult, GroupPledge, GroupSession, Nomination, NominationRound, Session, Treasury } from "../../shared/types";
 import {
@@ -649,5 +649,23 @@ export class FirestoreStore implements Store {
 
   async countSubscribers() {
     return (await this.db.collection("subscribers").where("status", "==", "active").count().get()).data().count;
+  }
+
+  async growth(since: string) {
+    const count = async (q: Query) => (await q.count().get()).data().count;
+    const col = (name: string) => this.db.collection(name);
+    const [accounts, newAccounts, subscribers, newSubscribers, groups, newGroups] = await Promise.all([
+      count(col("accounts")),
+      count(col("accounts").where("createdAt", ">=", since)),
+      count(col("subscribers").where("status", "==", "active")),
+      count(col("subscribers").where("createdAt", ">=", since)),
+      count(col("groups")),
+      count(col("groups").where("createdAt", ">=", since)),
+    ]);
+    return {
+      accounts: { total: accounts, added: newAccounts },
+      subscribers: { total: subscribers, added: newSubscribers },
+      groups: { total: groups, added: newGroups },
+    };
   }
 }

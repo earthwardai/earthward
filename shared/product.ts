@@ -281,3 +281,17 @@ export const PLANS: { title: string; lede: string; plans: Plan[]; faq: { q: stri
     { q: "Where does our data go?", a: "Councils run on Google Cloud. Group members aren't asked for names or emails. Read the privacy page for the details." },
   ],
 };
+
+/** The Product Hunt launch: a small pill on the site points people to it before and on the day. */
+export const LAUNCH = {
+  url: "https://www.producthunt.com/products/earthward-ai",
+  /** 24 Nov 2026, 12:01 AM Pacific. */
+  start: "2026-11-24T08:01:00Z",
+  end: "2026-11-25T08:01:00Z",
+};
+
+export function launchPhase(now: number): "soon" | "live" | null {
+  if (now < Date.parse(LAUNCH.start)) return "soon";
+  if (now < Date.parse(LAUNCH.end)) return "live";
+  return null;
+}

@@ -17,6 +17,7 @@ import { Home } from "./pages/Home";
 import { AboutPage, ContactPage, HowItWorksPage, LedgerPage, NotFound, PrivacyPage, SessionPage, TermsPage } from "./pages/Pages";
 import { startTracking, trackView } from "./track";
 import { FeedbackButton } from "./components/Feedback";
+import { LaunchPill } from "./components/LaunchPill";
 import { PredictPage } from "./pages/Predict";
 import { NominatePage } from "./pages/Nominate";
 import { DevelopersPage } from "./pages/Developers";
@@ -308,6 +309,7 @@ function App() {
       </Switch>
       <Footer />
       <DonateDialog />
+      <LaunchPill />
       <FeedbackButton />
     </>
   );

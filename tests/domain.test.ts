@@ -263,3 +263,14 @@ describe("launch-week posts", () => {
     }
   });
 });
+
+describe("Product Hunt launch pill", () => {
+  it("shows before and on launch day, then goes away", async () => {
+    const { launchPhase } = await import("../shared/product");
+    expect(launchPhase(Date.parse("2026-11-19T04:00:00Z"))).toBe("soon");
+    expect(launchPhase(Date.parse("2026-11-24T08:00:59Z"))).toBe("soon");
+    expect(launchPhase(Date.parse("2026-11-24T08:01:00Z"))).toBe("live");
+    expect(launchPhase(Date.parse("2026-11-25T08:00:59Z"))).toBe("live");
+    expect(launchPhase(Date.parse("2026-11-25T08:01:00Z"))).toBeNull();
+  });
+});

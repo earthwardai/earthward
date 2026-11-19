@@ -282,6 +282,8 @@ export interface Store {
   deleteSubscriber(id: string): Promise<void>;
   listActiveSubscribers(limit: number): Promise<SubscriberRecord[]>;
   countSubscribers(): Promise<number>;
+  /** Totals, and how many were created at or after `since` (ISO), for the daily report. Subscribers' total counts active ones. */
+  growth(since: string): Promise<Record<"accounts" | "subscribers" | "groups", { total: number; added: number }>>;
   getArena(day: string): Promise<ArenaResult | null>;
   /** Claims the right to score a day's predictions. True only for the first caller. */
   claimScoring(day: string): Promise<boolean>;
