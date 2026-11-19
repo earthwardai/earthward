@@ -17,3 +17,18 @@ describe("Firestore store", () => {
     for (const f of fields.filter((x) => x !== "day")) expect(body, `getStats should return ${f}`).toContain(`d.${f}`);
   });
 });
+
+describe("Firestore stats writes", () => {
+  it("never sends an empty map, which merge would treat as 'replace with nothing'", async () => {
+    const { statsPatch } = await import("../server/store/firestore");
+    const clicksOnly = statsPatch({ views: 0, clicks: 2, paths: {}, targets: { donate: 2 }, country: null, referrers: {}, campaigns: {}, human: true });
+    expect(Object.keys(clicksOnly)).not.toContain("paths");
+    expect(Object.keys(clicksOnly)).not.toContain("referrers");
+    expect(Object.keys(clicksOnly)).not.toContain("campaigns");
+    expect(Object.keys(clicksOnly)).toContain("targets");
+    const view = statsPatch({ views: 1, clicks: 0, paths: { "/council/2026-11-18": 1 }, targets: {}, country: "IN", referrers: { "bsky.app": 1 }, campaigns: {}, human: false });
+    expect(Object.keys(view["paths"] as object)).toEqual(["_council_2026-11-18"]);
+    expect(Object.keys(view)).not.toContain("targets");
+    expect(Object.keys(view)).not.toContain("humanViews");
+  });
+});

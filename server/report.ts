@@ -1,5 +1,5 @@
 import { causeById } from "../shared/causes";
-import { dayKey } from "../shared/council";
+import { dayKey, nextSessionAt } from "../shared/council";
 import { config } from "./config";
 import { esc, layout, send } from "./notify";
 import type { DayStats, Store } from "./store/types";
@@ -37,14 +37,18 @@ export interface Report {
 
 export async function buildReport(store: Store, now = new Date(), f: typeof fetch = fetch): Promise<Report> {
   const tz = config.timeZone;
-  const day = dayKey(new Date(now.getTime() - DAY), tz);
-  const since = new Date(now.getTime() - DAY).toISOString();
+  // Yesterday in local time, as [since, until).
+  const until = nextSessionAt(new Date(now.getTime() - DAY), tz);
+  const sinceAt = nextSessionAt(new Date(until.getTime() - DAY - 60_000), tz);
+  const day = dayKey(sinceAt, tz);
+  const since = sinceAt.toISOString();
+  const end = until.toISOString();
   const days = Array.from({ length: 8 }, (_, i) => dayKey(new Date(now.getTime() - (8 - i) * DAY), tz));
 
   const handle = process.env.BLUESKY_HANDLE;
   const [stats, growth, messages, security, sessions, crowd, push, bsky, gh] = await Promise.all([
     store.getStats(days),
-    store.growth(since),
+    store.growth(since, end),
     store.listMessages(100),
     store.listSecurity(300),
     store.listSessions(1),
@@ -60,10 +64,10 @@ export async function buildReport(store: Store, now = new Date(), f: typeof fetc
   const avg = before.length ? Math.round(before.reduce((n, s) => n + (s.humanUniques ?? 0), 0) / 7) : 0;
   const people = y.humanUniques ?? 0;
 
-  const recent = messages.filter((m) => m.at >= since);
+  const recent = messages.filter((m) => m.at >= since && m.at < end);
   const notes = recent.filter((m) => m.kind !== "ask");
   const asks = recent.filter((m) => m.kind === "ask");
-  const events = security.filter((e) => e.at >= since);
+  const events = security.filter((e) => e.at >= since && e.at < end);
   const byKind = top(
     events.reduce<Record<string, number>>((acc, e) => ((acc[e.kind] = (acc[e.kind] ?? 0) + 1), acc),
     {}),
@@ -85,12 +89,12 @@ export async function buildReport(store: Store, now = new Date(), f: typeof fetc
         ["All visitors, bots included", String(y.uniques)],
         ["From", list(top(y.referrers, 5))],
         ["Campaigns", list(top(y.campaigns, 5))],
-        ["Countries", list(top(y.countries, 5))],
+        ["Countries (page loads)", list(top(y.countries, 5))],
         ["Pages", list(top(y.paths, 6))],
       ],
     },
     {
-      title: "Sign-ups (last 24 hours, and total)",
+      title: "Sign-ups (new that day, and total)",
       rows: [
         ["Accounts", `+${growth.accounts.added}, ${growth.accounts.total} in all`],
         ["Email subscribers", `+${growth.subscribers.added}, ${growth.subscribers.total} active`],
@@ -126,7 +130,7 @@ export async function buildReport(store: Store, now = new Date(), f: typeof fetc
   const text = [
     subject,
     ...sections.map((s) => `\n${s.title}\n${s.rows.map(([k, v]) => `  ${k}: ${v}`).join("\n")}`),
-    notes.length ? `\nMessages (reply from the forwarded email; it goes straight to the visitor)\n${noteLines.join("\n")}` : "\nNo messages in the last 24 hours.",
+    notes.length ? `\nMessages (reply from the forwarded email; it goes straight to the visitor)\n${noteLines.join("\n")}` : `\nNo messages on ${shortDate(day)}.`,
     asks.length ? `\nQuestions people asked\n${askLines.join("\n")}` : "",
     `\nAdmin (VPN): ${config.siteUrl}/admin\nStatus: ${config.siteUrl}/status`,
   ].join("\n");
@@ -140,7 +144,7 @@ export async function buildReport(store: Store, now = new Date(), f: typeof fetc
     `<h1 style="font-size:20px;line-height:1.3;margin:0 0 16px">${esc(subject)}</h1>
 ${sections.map((s) => `<h2 style="font-size:15px;margin:24px 0 6px">${esc(s.title)}</h2>${table(s.rows)}`).join("\n")}
 <h2 style="font-size:15px;margin:24px 0 6px">Messages</h2>
-${notes.length ? `<p style="font-size:14px;margin:0 0 6px">Reply from the forwarded email; it goes straight to the visitor.</p>${ul(noteLines)}` : `<p style="font-size:14px;color:#6b665c">None in the last 24 hours.</p>`}
+${notes.length ? `<p style="font-size:14px;margin:0 0 6px">Reply from the forwarded email; it goes straight to the visitor.</p>${ul(noteLines)}` : `<p style="font-size:14px;color:#6b665c">None that day.</p>`}
 ${asks.length ? `<h2 style="font-size:15px;margin:24px 0 6px">Questions people asked</h2>${ul(askLines)}` : ""}
 <p style="font-size:13px;color:#6b665c;margin:24px 0 0"><a href="${config.siteUrl}/status" style="color:#8c7148">Status</a> · <a href="${config.siteUrl}/admin" style="color:#8c7148">Admin</a> (VPN only)</p>`,
   );

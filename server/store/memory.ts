@@ -558,8 +558,8 @@ export class MemoryStore implements Store {
     return [...this.subscribers.values()].filter((s) => s.status === "active").length;
   }
 
-  async growth(since: string) {
-    const tally = (rows: { createdAt: string }[], total = rows.length) => ({ total, added: rows.filter((r) => r.createdAt >= since).length });
+  async growth(since: string, until: string) {
+    const tally = (rows: { createdAt: string }[], total = rows.length) => ({ total, added: rows.filter((r) => r.createdAt >= since && r.createdAt < until).length });
     return {
       accounts: tally([...this.accounts.values()]),
       subscribers: tally([...this.subscribers.values()], await this.countSubscribers()),

@@ -31,6 +31,25 @@ const seqId = (seq: number) => String(seq).padStart(12, "0");
 /** Firestore treats dots in map keys as paths, so keys are reduced to a safe alphabet. */
 const safeKey = (k: string) => k.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 80) || "_";
 
+/**
+ * The day's counter increments for one analytics batch. Maps with nothing to add are left out:
+ * with merge, an empty map would replace the stored one and wipe the day's counts.
+ */
+export function statsPatch(inc: StatsIncrement): Record<string, unknown> {
+  const out: Record<string, unknown> = {
+    views: FieldValue.increment(inc.views),
+    clicks: FieldValue.increment(inc.clicks),
+    batches: FieldValue.increment(1),
+  };
+  for (const key of ["paths", "targets", "referrers", "campaigns"] as const) {
+    const entries = Object.entries(inc[key]);
+    if (entries.length) out[key] = Object.fromEntries(entries.map(([k, v]) => [safeKey(k), FieldValue.increment(v)]));
+  }
+  if (inc.human) out.humanViews = FieldValue.increment(inc.views);
+  if (inc.country) out.countries = { [safeKey(inc.country)]: FieldValue.increment(1) };
+  return out;
+}
+
 const emptyTreasury = (): Treasury => ({
   balance: 0,
   totalDonated: 0,
@@ -244,24 +263,7 @@ export class FirestoreStore implements Store {
     const visitorRef = statsRef.collection("visitors").doc(vidHash);
     const write = this.db.batch();
     write.set(this.db.collection("analytics").doc(), { ...batch, expireAt: this.expireAt() });
-    const nested = (m: Record<string, number>) =>
-      Object.fromEntries(Object.entries(m).map(([k, v]) => [safeKey(k), FieldValue.increment(v)]));
-    write.set(
-      statsRef,
-      {
-        day,
-        views: FieldValue.increment(inc.views),
-        clicks: FieldValue.increment(inc.clicks),
-        batches: FieldValue.increment(1),
-        paths: nested(inc.paths),
-        targets: nested(inc.targets),
-        referrers: nested(inc.referrers),
-        campaigns: nested(inc.campaigns),
-        ...(inc.human ? { humanViews: FieldValue.increment(inc.views) } : {}),
-        ...(inc.country ? { countries: { [safeKey(inc.country)]: FieldValue.increment(1) } } : {}),
-      },
-      { merge: true },
-    );
+    write.set(statsRef, { day, ...statsPatch(inc) }, { merge: true });
     await write.commit();
     // Counting unique visitors needs a create-if-absent, which a batch cannot express.
     try {
@@ -651,16 +653,16 @@ export class FirestoreStore implements Store {
     return (await this.db.collection("subscribers").where("status", "==", "active").count().get()).data().count;
   }
 
-  async growth(since: string) {
+  async growth(since: string, until: string) {
     const count = async (q: Query) => (await q.count().get()).data().count;
     const col = (name: string) => this.db.collection(name);
     const [accounts, newAccounts, subscribers, newSubscribers, groups, newGroups] = await Promise.all([
       count(col("accounts")),
-      count(col("accounts").where("createdAt", ">=", since)),
+      count(col("accounts").where("createdAt", ">=", since).where("createdAt", "<", until)),
       count(col("subscribers").where("status", "==", "active")),
-      count(col("subscribers").where("createdAt", ">=", since)),
+      count(col("subscribers").where("createdAt", ">=", since).where("createdAt", "<", until)),
       count(col("groups")),
-      count(col("groups").where("createdAt", ">=", since)),
+      count(col("groups").where("createdAt", ">=", since).where("createdAt", "<", until)),
     ]);
     return {
       accounts: { total: accounts, added: newAccounts },
