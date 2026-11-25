@@ -49,9 +49,11 @@ function briefing(ctx: Context): string {
   const prev = ctx.previous?.length
     ? ctx.previous.map((a) => `${causeById(a.causeId)?.name} ${Math.round(a.share * 100)}%`).join(", ")
     : "none, this is the first session";
-  // Donor text is untrusted. It is quoted as data and the model is told so.
+  // Donor text is untrusted. It is quoted as data and the model is told so. Angle brackets and
+  // quotes are removed so a note can't close its own tag and pose as part of the briefing.
+  const quoted = (s: string) => s.replace(/[<>"]/g, "");
   const notes = ctx.messages.length
-    ? ctx.messages.map((m) => `  <note from="${(m.name ?? "anonymous").replace(/"/g, "")}">${m.message}</note>`).join("\n")
+    ? ctx.messages.map((m) => `  <note from="${quoted(m.name ?? "anonymous")}">${quoted(m.message)}</note>`).join("\n")
     : "  (none)";
   const opening = ctx.team
     ? [
