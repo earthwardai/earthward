@@ -39,6 +39,17 @@ describe("pages for crawlers and answer engines", () => {
     expect(await (await get("/account")).text()).toContain('content="noindex');
   });
 
+  it("says who runs the site on the About page and in structured data, and sends /team there", async () => {
+    const { MAKER } = await import("../shared/content");
+    const about = await (await get("/about")).text();
+    expect(about).toContain("<h2>Who runs it</h2>");
+    expect(about).toContain(`built and run by ${MAKER.name}, from ${MAKER.place}`);
+    expect(about).toContain(`"founder":{"@type":"Person","name":"${MAKER.name}"`);
+    const team = await get("/team");
+    expect(team.status).toBe(301);
+    expect(team.headers.get("location")).toBe("/about");
+  });
+
   it("serves Spanish and Hindi pages that point at each other", async () => {
     const es = await (await get("/es")).text();
     expect(es).toContain('<html lang="es">');

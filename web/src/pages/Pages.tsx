@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Link } from "wouter";
 import { AGENTS } from "../../../shared/agents";
 import { CAUSES, causeById } from "../../../shared/causes";
-import { ABOUT } from "../../../shared/content";
+import { ABOUT, MAKER } from "../../../shared/content";
 import { RULES } from "../../../shared/council";
 import type { LedgerEntry } from "../../../shared/ledger";
 import type { Session } from "../../../shared/types";
@@ -300,6 +300,10 @@ export function TermsPage() {
     <main id="main" className="page prose">
       <h1>Terms</h1>
       <p className="lede">Plain-language terms for a simulation. By using Earthward you agree to them.</p>
+      <h2>Who runs Earthward</h2>
+      <p>
+        Earthward AI is run by {MAKER.name}, from {MAKER.place}. Questions about these terms go to <a href={`mailto:${MAKER.email}`}>{MAKER.email}</a>.
+      </p>
       <h2>It's a simulation</h2>
       <p>Credits have no monetary value, cannot be bought, sold or withdrawn, and are never paid to any organisation. Outcomes shown are illustrative estimates, not reports of real work.</p>
       <h2>What you post is public and permanent</h2>

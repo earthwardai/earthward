@@ -355,6 +355,9 @@ a:hover {
   .star-btn {
     display: none;
   }
+  .hide-xs {
+    display: none;
+  }
 }
 
 .theme-toggle {

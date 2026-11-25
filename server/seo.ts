@@ -1,7 +1,7 @@
 import { CHANGELOG, CLASSROOM, PLANS, PRESS, QUIZ } from "../shared/product";
 import { AGENTS, agentById } from "../shared/agents";
 import { CAUSES, causeById } from "../shared/causes";
-import { ABOUT, ALT_NAMES, ASK, DEFINITION, DOMAIN_LABELS, EARTH_AI, GLOBAL_AI, HEADLINE, SITE_NAME, SUMMARY, faq } from "../shared/content";
+import { ABOUT, ALT_NAMES, ASK, DEFINITION, MAKER, DOMAIN_LABELS, EARTH_AI, GLOBAL_AI, HEADLINE, SITE_NAME, SUMMARY, faq } from "../shared/content";
 import { RULES } from "../shared/council";
 import type { Session } from "../shared/types";
 import { LOCALES, type Locale } from "../shared/locales";
@@ -58,6 +58,8 @@ const ORG = () => ({
   url: `${config.siteUrl}/`,
   logo: `${config.siteUrl}/brand/emblem-720.jpg`,
   description: DEFINITION,
+  founder: { "@type": "Person", name: MAKER.name, sameAs: [MAKER.github] },
+  email: MAKER.email,
   ...(config.sameAs.length ? { sameAs: config.sameAs } : {}),
 });
 

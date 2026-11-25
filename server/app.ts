@@ -167,6 +167,9 @@ export function createApp(store: Store) {
     await next();
   });
 
+  // Visitors checking who is behind the site often try /team; the answer is on the About page.
+  app.get("/team", (c) => c.redirect("/about", 301));
+
   app.use("/api/*", async (c, next) => {
     // Crawlers may fetch the API to render pages, but the JSON itself should never be indexed.
     c.header("X-Robots-Tag", "noindex");
